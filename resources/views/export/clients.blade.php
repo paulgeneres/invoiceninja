@@ -5,12 +5,18 @@
     @endif
     <td>{{ trans('texts.balance') }}</td>
     <td>{{ trans('texts.paid_to_date') }}</td>
-    <td>{{ trans('texts.address1') }}</td>
-    <td>{{ trans('texts.address2') }}</td>
-    <td>{{ trans('texts.city') }}</td>
-    <td>{{ trans('texts.state') }}</td>
-    <td>{{ trans('texts.postal_code') }}</td>
-    <td>{{ trans('texts.country') }}</td>
+    <td>{{ trans('texts.billing_address1') }}</td>
+    <td>{{ trans('texts.billing_address2') }}</td>
+    <td>{{ trans('texts.billing_city') }}</td>
+    <td>{{ trans('texts.billing_state') }}</td>
+    <td>{{ trans('texts.billing_postal_code') }}</td>
+    <td>{{ trans('texts.billing_country') }}</td>
+    <td>{{ trans('texts.shipping_address1') }}</td>
+    <td>{{ trans('texts.shipping_address2') }}</td>
+    <td>{{ trans('texts.shipping_city') }}</td>
+    <td>{{ trans('texts.shipping_state') }}</td>
+    <td>{{ trans('texts.shipping_postal_code') }}</td>
+    <td>{{ trans('texts.shipping_country') }}</td>
     <td>{{ trans('texts.id_number') }}</td>
     <td>{{ trans('texts.vat_number') }}</td>
     <td>{{ trans('texts.website') }}</td>
@@ -19,20 +25,23 @@
     <td>{{ trans('texts.public_notes') }}</td>
     <td>{{ trans('texts.private_notes') }}</td>
     @if ($account->custom_client_label1)
-        <td>{{ $account->custom_client_label1 }}</td>
+        <td>{{ $account->present()->customClientLabel1 }}</td>
     @endif
     @if ($account->custom_client_label2)
-        <td>{{ $account->custom_client_label2 }}</td>
+        <td>{{ $account->present()->customClientLabel2 }}</td>
+    @endif
+    @if ($account->hasReminders())
+        <td>{{ trans('texts.reminders') }}</td>
     @endif
     <td>{{ trans('texts.first_name') }}</td>
     <td>{{ trans('texts.last_name') }}</td>
     <td>{{ trans('texts.email') }}</td>
     <td>{{ trans('texts.phone') }}</td>
     @if ($account->custom_contact_label1)
-        <td>{{ $account->custom_contact_label1 }}</td>
+        <td>{{ $account->present()->customContactLabel1 }}</td>
     @endif
     @if ($account->custom_contact_label2)
-        <td>{{ $account->custom_contact_label2 }}</td>
+        <td>{{ $account->present()->customContactLabel2 }}</td>
     @endif
 </tr>
 
@@ -50,6 +59,12 @@
         <td>{{ $client->state }}</td>
         <td>{{ $client->postal_code }}</td>
         <td>{{ $client->present()->country }}</td>
+        <td>{{ $client->shipping_address1 }}</td>
+        <td>{{ $client->shipping_address2 }}</td>
+        <td>{{ $client->shipping_city }}</td>
+        <td>{{ $client->shipping_state }}</td>
+        <td>{{ $client->shipping_postal_code }}</td>
+        <td>{{ $client->present()->shipping_country }}</td>
         <td>{{ $client->id_number }}</td>
         <td>{{ $client->vat_number }}</td>
         <td>{{ $client->website }}</td>
@@ -62,6 +77,9 @@
         @endif
         @if ($account->custom_client_label2)
             <td>{{ $client->custom_value2 }}</td>
+        @endif
+        @if ($account->hasReminders())
+            <td>{{ $client->send_reminders ? trans('texts.yes') : trans('texts.no') }}</td>
         @endif
         <td>{{ $client->contacts[0]->first_name }}</td>
         <td>{{ $client->contacts[0]->last_name }}</td>

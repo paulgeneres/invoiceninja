@@ -89,9 +89,14 @@ class Utils
         return env('NINJA_DEV') == 'true';
     }
 
+    public static function isTimeTracker()
+    {
+        return array_get($_SERVER, 'HTTP_USER_AGENT') == TIME_TRACKER_USER_AGENT;
+    }
+
     public static function requireHTTPS()
     {
-        if (Request::root() === 'http://ninja.dev' || Request::root() === 'http://ninja.dev:8000') {
+        if (in_array(Request::root(), ['http://www.ninja.test', 'http://www.ninja.test:8000'])) {
             return false;
         }
 
@@ -101,6 +106,11 @@ class Utils
     public static function isReseller()
     {
         return self::getResllerType() ? true : false;
+    }
+
+    public static function isRootFolder()
+    {
+        return strlen(preg_replace('/[^\/]/', '', url('/'))) == 2;
     }
 
 	public static function clientViewCSS()
@@ -168,6 +178,11 @@ class Utils
     }
 
     public static function getTermsLink()
+    {
+        return static::isNinja() ? NINJA_WEB_URL.'/terms' : NINJA_WEB_URL.'/self-hosting-the-invoice-ninja-platform';
+    }
+
+    public static function getPrivacyLink()
     {
         return static::isNinja() ? NINJA_WEB_URL.'/terms' : NINJA_WEB_URL.'/self-hosting-the-invoice-ninja-platform';
     }
@@ -354,7 +369,9 @@ class Utils
             if ($field == 'checkbox') {
                 $data[] = $field;
             } elseif ($field) {
-                if ($module) {
+                if (substr($field, 0, 1) == '-') {
+                    $data[] = substr($field, 1);
+                } elseif ($module) {
                     $data[] = mtrans($module, $field);
                 } else {
                     $data[] = trans("texts.$field");
@@ -423,6 +440,7 @@ class Utils
             'url' => Input::get('url', Request::url()),
             'previous' => url()->previous(),
             'user_agent' => isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '',
+            'locale' => App::getLocale(),
             'ip' => Request::getClientIp(),
             'count' => Session::get('error_count', 0),
             'is_console' => App::runningInConsole() ? 'yes' : 'no',
@@ -454,6 +472,11 @@ class Utils
 
     public static function parseFloat($value)
     {
+        // check for comma as decimal separator
+        if (preg_match('/,[\d]{1,2}$/', $value)) {
+            $value = str_replace(',', '.', $value);
+        }
+
         $value = preg_replace('/[^0-9\.\-]/', '', $value);
 
         return floatval($value);
@@ -481,6 +504,21 @@ class Utils
         });
 
         return $data->first();
+    }
+
+    public static function formatNumber($value, $currencyId = false, $precision = 0)
+    {
+        $value = floatval($value);
+
+        if (! $currencyId) {
+            $currencyId = Session::get(SESSION_CURRENCY, DEFAULT_CURRENCY);
+        }
+
+        $currency = self::getFromCache($currencyId, 'currencies');
+        $thousand = $currency->thousand_separator;
+        $decimal = $currency->decimal_separator;
+
+        return number_format($value, $precision, $decimal, $thousand);
     }
 
     public static function formatMoney($value, $currencyId = false, $countryId = false, $decorator = false)
@@ -549,6 +587,10 @@ class Utils
 
         if ($type === ENTITY_EXPENSE_CATEGORY) {
             return 'expense_categories';
+        } elseif ($type === ENTITY_PROPOSAL_CATEGORY) {
+            return 'proposal_categories';
+        } elseif ($type === ENTITY_TASK_STATUS) {
+            return 'task_statuses';
         } else {
             return $type . 's';
         }
@@ -896,32 +938,6 @@ class Utils
         }
     }
 
-    public static function notifyZapier($subscription, $data)
-    {
-        $curl = curl_init();
-        $jsonEncodedData = json_encode($data);
-
-        $opts = [
-            CURLOPT_URL => $subscription->target_url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CUSTOMREQUEST => 'POST',
-            CURLOPT_POST => 1,
-            CURLOPT_POSTFIELDS => $jsonEncodedData,
-            CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Content-Length: '.strlen($jsonEncodedData)],
-        ];
-
-        curl_setopt_array($curl, $opts);
-
-        $result = curl_exec($curl);
-        $status = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-
-        curl_close($curl);
-
-        if ($status == 410) {
-            $subscription->delete();
-        }
-    }
-
     public static function getApiHeaders($count = 0)
     {
         return [
@@ -1008,13 +1024,21 @@ class Utils
         return $str;
     }
 
-    public static function getSubdomain($url)
+    public static function getSubdomain($url = false)
     {
+        if (! $url) {
+            $url = Request::server('HTTP_HOST');
+        }
+
         $parts = parse_url($url);
         $subdomain = '';
 
-        if (isset($parts['host'])) {
-            $host = explode('.', $parts['host']);
+        if (isset($parts['host']) || isset($parts['path'])) {
+            if (isset($parts['host'])) {
+                $host = explode('.', $parts['host']);
+            } else {
+                $host = explode('.', $parts['path']);
+            }
             if (count($host) > 2) {
                 $subdomain = $host[0];
             }
@@ -1064,7 +1088,7 @@ class Utils
     {
         $name = trim($name);
         $lastName = (strpos($name, ' ') === false) ? '' : preg_replace('#.*\s([\w-]*)$#', '$1', $name);
-        $firstName = trim(preg_replace('#'.$lastName.'#', '', $name));
+        $firstName = trim(preg_replace('#' . preg_quote($lastName, '/') . '#', '', $name));
 
         return [$firstName, $lastName];
     }
@@ -1091,6 +1115,25 @@ class Utils
             return $postalCode . ' ' . $str;
         } else {
             return $str . ' ' . $postalCode;
+        }
+    }
+
+    public static function getCustomLabel($value)
+    {
+        if (strpos($value, '|') !== false) {
+            return explode('|', $value)[0];
+        } else {
+            return $value;
+        }
+    }
+
+    public static function getCustomValues($value)
+    {
+        if (strpos($value, '|') !== false) {
+            $values = explode(',', explode('|', $value)[1]);
+            return array_combine($values, $values);
+        } else {
+            return $value;
         }
     }
 
@@ -1267,7 +1310,7 @@ class Utils
         $tax1 = round($amount * $taxRate1 / 100, 2);
         $tax2 = round($amount * $taxRate2 / 100, 2);
 
-        return round($amount + $tax1 + $tax2, 2);
+        return round($tax1 + $tax2, 2);
     }
 
     public static function roundSignificant($value, $precision = 2) {
@@ -1302,6 +1345,32 @@ class Utils
         for($r = ""; $n >= 0; $n = intval($n / 26) - 1)
             $r = chr($n%26 + 0x41) . $r;
         return $r;
+    }
+
+    public static function brewerColor($number) {
+        $colors = [
+            '#0B629E',
+            '#43365B',
+            '#63A188',
+            '#F7BF6C',
+            '#D35746',
+            '#6CB4DD',
+            '#034C78',
+            '#30253E',
+            '#394648',
+            '#F89941',
+            '#F48568',
+            '#3495C6',
+        ];
+        $number = ($number-1) % count($colors);
+
+        return $colors[$number];
+    }
+
+    public static function brewerColorRGB($number) {
+        $color = static::brewerColor($number);
+        list($r, $g, $b) = sscanf($color, "#%02x%02x%02x");
+        return "{$r},{$g},{$b}";
     }
 
     /**

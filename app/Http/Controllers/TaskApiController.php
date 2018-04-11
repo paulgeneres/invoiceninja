@@ -149,8 +149,9 @@ class TaskApiController extends BaseAPIController
      */
     public function update(UpdateTaskRequest $request)
     {
+        
         $task = $request->entity();
-
+        
         $task = $this->taskRepo->save($task->public_id, \Illuminate\Support\Facades\Input::all());
 
         return $this->itemResponse($task);

@@ -276,16 +276,22 @@ class WePayPaymentDriver extends BasePaymentDriver
                 throw new Exception('Unknown payment');
             }
 
+            if ($payment->is_deleted || $payment->invoice->is_deleted) {
+                throw new Exception('Payment is deleted');
+            }
+
             $wepay = Utils::setupWePay($accountGateway);
             $checkout = $wepay->request('checkout', [
                 'checkout_id' => intval($objectId),
             ]);
 
+            /*
             if ($checkout->state == 'refunded') {
                 $payment->recordRefund();
             } elseif (! empty($checkout->refund) && ! empty($checkout->refund->amount_refunded) && ($checkout->refund->amount_refunded - $payment->refunded) > 0) {
                 $payment->recordRefund($checkout->refund->amount_refunded - $payment->refunded);
             }
+            */
 
             if ($checkout->state == 'captured') {
                 $payment->markComplete();

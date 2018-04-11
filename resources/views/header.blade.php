@@ -37,6 +37,14 @@
     });
   }
 
+  function openTimeTracker() {
+      var width = 1060;
+      var height = 700;
+      var left = (screen.width/2)-(width/4);
+      var top = (screen.height/2)-(height/1.5);
+      window.open("{{ url('/time_tracker') }}", "time-tracker", "width="+width+",height="+height+",scrollbars=no,toolbar=no,screenx="+left+",screeny="+top+",location=no,titlebar=no,directories=no,status=no,menubar=no");
+  }
+
   window.loadedSearchData = false;
   function onSearchBlur() {
       $('#search').typeahead('val', '');
@@ -58,9 +66,9 @@
             name: 'data',
             limit: 3,
             display: 'value',
-            source: searchData(data['{{ Auth::user()->account->custom_client_label1 }}'], 'tokens'),
+            source: searchData(data['{{ Auth::user()->account->present()->customClientLabel1 }}'], 'tokens'),
             templates: {
-              header: '&nbsp;<span style="font-weight:600;font-size:16px">{{ Auth::user()->account->custom_client_label1 }}</span>'
+              header: '&nbsp;<span style="font-weight:600;font-size:16px">{{ Auth::user()->account->present()->customClientLabel1 }}</span>'
             }
           }
           @endif
@@ -69,9 +77,9 @@
             name: 'data',
             limit: 3,
             display: 'value',
-            source: searchData(data['{{ Auth::user()->account->custom_client_label2 }}'], 'tokens'),
+            source: searchData(data['{{ Auth::user()->account->present()->customClientLabel2 }}'], 'tokens'),
             templates: {
-              header: '&nbsp;<span style="font-weight:600;font-size:16px">{{ Auth::user()->account->custom_client_label2 }}</span>'
+              header: '&nbsp;<span style="font-weight:600;font-size:16px">{{ Auth::user()->account->present()->customClientLabel2 }}</span>'
             }
           }
           @endif
@@ -241,7 +249,9 @@
 
         @if (Auth::check())
           @if (!Auth::user()->registered)
-            {!! Button::success(trans('texts.sign_up'))->withAttributes(array('id' => 'signUpButton', 'data-toggle'=>'modal', 'data-target'=>'#signUpModal', 'style' => 'max-width:100px;;overflow:hidden'))->small() !!} &nbsp;
+              @if (!Auth::user()->confirmed)
+                {!! Button::success(trans('texts.sign_up'))->withAttributes(array('id' => 'signUpButton', 'onclick' => 'showSignUp()', 'style' => 'max-width:100px;;overflow:hidden'))->small() !!} &nbsp;
+              @endif
           @elseif (Utils::isNinjaProd() && (!Auth::user()->isPro() || Auth::user()->isTrial()))
             @if (Auth::user()->account->company->hasActivePromo())
                 {!! Button::warning(trans('texts.plan_upgrade'))->withAttributes(array('onclick' => 'showUpgradeModal()', 'style' => 'max-width:100px;overflow:hidden'))->small() !!} &nbsp;
@@ -337,8 +347,11 @@
             'products' => false,
             'invoices' => false,
             'payments' => false,
+            'recurring_invoices' => 'recurring',
             'credits' => false,
             'quotes' => false,
+            'proposals' => false,
+            'projects' => false,
             'tasks' => false,
             'expenses' => false,
             'vendors' => false,
@@ -352,7 +365,7 @@
 
 </nav>
 
-<div id="wrapper" class='{!! session(SESSION_LEFT_SIDEBAR) ? 'toggled-left' : '' !!} {!! session(SESSION_RIGHT_SIDEBAR, true) ? 'toggled-right' : '' !!}'>
+<div id="wrapper" class='{{ session(SESSION_LEFT_SIDEBAR) ? 'toggled-left' : '' }} {{ session(SESSION_RIGHT_SIDEBAR, true) ? 'toggled-right' : '' }}'>
 
     <!-- Sidebar -->
     <div id="left-sidebar-wrapper" class="hide-phone">
@@ -363,8 +376,11 @@
                 'products',
                 'invoices',
                 'payments',
+                'recurring_invoices',
                 'credits',
                 'quotes',
+                'proposals',
+                'projects',
                 'tasks',
                 'expenses',
                 'vendors',
@@ -448,8 +464,12 @@
               <div class="alert alert-danger">{!! Session::get('error') !!}</div>
           @endif
 
+          <div class="pull-right">
+              @yield('top-right')
+          </div>
+
           @if (!isset($showBreadcrumbs) || $showBreadcrumbs)
-            {!! Form::breadcrumbs((isset($entity) && $entity->exists) ? $entity->present()->statusLabel : false) !!}
+            {!! Form::breadcrumbs((! empty($entity) && $entity->exists) ? $entity->present()->statusLabel : false) !!}
           @endif
 
           @yield('content')
@@ -458,7 +478,11 @@
             <div class="col-md-12">
 
               @if (Utils::isNinjaProd())
-                @if (Auth::check() && Auth::user()->isTrial())
+                @if (Auth::check() && Auth::user()->hasActivePromo())
+                    {!! trans('texts.promotion_footer', [
+                            'link' => '<a href="javascript:showUpgradeModal()">' . trans('texts.click_here') . '</a>'
+                        ]) !!}
+                @elseif (Auth::check() && Auth::user()->isTrial())
                   {!! trans(Auth::user()->account->getCountTrialDaysLeft() == 0 ? 'texts.trial_footer_last_day' : 'texts.trial_footer', [
                           'count' => Auth::user()->account->getCountTrialDaysLeft(),
                           'link' => '<a href="javascript:showUpgradeModal()">' . trans('texts.click_here') . '</a>'
@@ -476,6 +500,10 @@
 @include('partials.contact_us')
 @include('partials.sign_up')
 @include('partials.keyboard_shortcuts')
+
+@if (auth()->check() && ! auth()->user()->hasAcceptedLatestTerms())
+    @include('partials.accept_terms')
+@endif
 
 </div>
 

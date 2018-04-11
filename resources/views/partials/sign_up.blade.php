@@ -6,6 +6,8 @@
 
       $('#signUpModal').on('shown.bs.modal', function () {
         trackEvent('/account', '/view_sign_up');
+        // change the type after page load to prevent errors in Chrome console
+        $('#new_password').attr('type', 'password');
         $(['first_name','last_name','email','password']).each(function(i, field) {
           var $input = $('form.signUpForm #new_'+field);
           if (!$input.val()) {
@@ -23,7 +25,7 @@
       @endif
 
       // Ensure terms is checked for sign up form
-      @if (Auth::check() && ! Auth::user()->registered)
+      @if (Auth::check())
           setSignupEnabled(false);
           $("#terms_checkbox").change(function() {
               setSignupEnabled(this.checked);
@@ -34,7 +36,11 @@
 
 
   function showSignUp() {
-    $('#signUpModal').modal('show');
+    if (location.href.indexOf('/dashboard') == -1) {
+        location.href = "{{ url('/dashboard') }}?sign_up=true";
+    } else {
+        $('#signUpModal').modal('show');
+    }
   }
 
   function hideSignUp() {
@@ -72,11 +78,9 @@
       }
     });
 
-    @if (! Auth::user()->registered)
-        if (!$('#terms_checkbox').is(':checked')) {
-          isFormValid = false;
-        }
-    @endif
+    if (!$('#terms_checkbox').is(':checked')) {
+      isFormValid = false;
+    }
 
     $('#saveSignUpButton').prop('disabled', !isFormValid);
 
@@ -127,6 +131,7 @@
           @else
               handleSignedUp();
               NINJA.isRegistered = true;
+              $('#gettingStartedIframe').attr('src', '{{ str_replace('watch?v=', 'embed/', config('ninja.video_urls.getting_started')) }}');
               $('#signUpButton').hide();
               $('#myAccountButton').html(result);
               $('#signUpSuccessDiv, #signUpFooter, #closeSignUpButton').show();
@@ -147,6 +152,7 @@
 
 </script>
 
+@if (\Request::is('dashboard'))
 <div class="modal fade" id="signUpModal" tabindex="-1" role="dialog" aria-labelledby="signUpModalLabel" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -174,17 +180,18 @@
         </div>
 
         <div class="row signup-form">
-            @if (! Auth::user()->registered)
-                <div class="col-md-12">
-                    {!! Former::checkbox('terms_checkbox')
-                        ->label(' ')
-                        ->value(1)
-                        ->text(trans('texts.agree_to_terms', ['terms' => '<a href="'.Utils::getTermsLink().'" target="_blank">'.trans('texts.terms_of_service').'</a>']))
-                        ->raw() !!}
-                    <br/>
-                </div>
-                <br/>&nbsp;<br/>
-            @endif
+            <div class="col-md-12">
+                {!! Former::checkbox('terms_checkbox')
+                    ->label(' ')
+                    ->value(1)
+                    ->text(trans('texts.agree_to_terms', [
+                        'terms' => link_to(Utils::getTermsLink(), trans('texts.terms_of_service'), ['target' => '_blank']),
+                        'privacy' => link_to(Utils::getTermsLink(), trans('texts.privacy_policy'), ['target' => '_blank']),
+                    ]))
+                    ->raw() !!}
+                <br/>
+            </div>
+            <br/>&nbsp;<br/>
             @if (Utils::isOAuthEnabled() && ! Auth::user()->registered)
                 <div class="col-md-5">
                     @foreach (App\Services\AuthService::$providers as $provider)
@@ -211,18 +218,22 @@
                 {!! Former::text('new_first_name')
                         ->placeholder(trans('texts.first_name'))
                         ->autocomplete('given-name')
+                        ->data_lpignore('true')
                         ->label(' ') !!}
                 {!! Former::text('new_last_name')
                         ->placeholder(trans('texts.last_name'))
                         ->autocomplete('family-name')
+                        ->data_lpignore('true')
                         ->label(' ') !!}
                 {!! Former::text('new_email')
                         ->placeholder(trans('texts.email'))
                         ->autocomplete('email')
+                        ->data_lpignore('true')
                         ->label(' ') !!}
-                {!! Former::password('new_password')
+                {!! Former::text('new_password')
                         ->placeholder(trans('texts.password'))
                         ->autocomplete('new-password')
+                        ->data_lpignore('true')
                         ->label(' ') !!}
 
                 {{ Former::setOption('TwitterBootstrap3.labelWidths.large', 4) }}
@@ -232,11 +243,17 @@
             <center><div id="errorTaken" style="display:none">&nbsp;<br/><b>{{ trans('texts.email_taken') }}</b></div></center>
 
             <div class="col-md-12">
-                @if (Auth::user()->registered)
-                    <div style="padding-top:20px;padding-bottom:10px;">{!! trans('texts.email_alias_message') !!}</div>
-                @elseif (Utils::isNinja() && ! Utils::isPro())
-                    <div style="padding-top:20px;padding-bottom:10px;">{{ trans('texts.trial_message') }}</div>
-                @endif
+                <div style="padding-top:20px;padding-bottom:10px;">
+                    @if (Auth::user()->registered)
+                        {!! trans('texts.email_alias_message') !!}
+                    @elseif (Utils::isNinjaProd())
+                        @if (Utils::isPro())
+                            {{ trans('texts.free_year_message') }}
+                        @else
+                            {{ trans('texts.trial_message') }}
+                        @endif
+                    @endif
+                </div>
             </div>
         </div>
 
@@ -256,8 +273,11 @@
         <br/>
         @if (Utils::isNinja())
           {{ trans('texts.success_message') }}
+          <br/>&nbsp;<br/>
         @endif
-        <br/>
+        @if (! auth()->user()->registered)
+            <iframe id="gettingStartedIframe" width="100%" height="315"></iframe>
+        @endif
       </div>
 
       </div>
@@ -273,7 +293,7 @@
     </div>
   </div>
 </div>
-
+@endif
 
 <div class="modal fade" id="logoutModal" tabindex="-1" role="dialog" aria-labelledby="logoutModalLabel" aria-hidden="true">
   <div class="modal-dialog">

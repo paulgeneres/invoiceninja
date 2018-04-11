@@ -211,6 +211,7 @@ class AccountTransformer extends EntityTransformer
             'enable_reminder1' => $account->enable_reminder1,
             'enable_reminder2' => $account->enable_reminder2,
             'enable_reminder3' => $account->enable_reminder3,
+            'enable_reminder4' => $account->enable_reminder4,
             'num_days_reminder1' => $account->num_days_reminder1,
             'num_days_reminder2' => $account->num_days_reminder2,
             'num_days_reminder3' => $account->num_days_reminder3,
@@ -236,6 +237,9 @@ class AccountTransformer extends EntityTransformer
             'header_font_id' => (int) $account->header_font_id,
             'body_font_id' => (int) $account->body_font_id,
             'auto_convert_quote' => (bool) $account->auto_convert_quote,
+            'auto_archive_quote' => (bool) $account->auto_archive_quote,
+            'auto_archive_invoice' => (bool) $account->auto_archive_invoice,
+            'auto_email_invoice' => (bool) $account->auto_email_invoice,
             'all_pages_footer' => (bool) $account->all_pages_footer,
             'all_pages_header' => (bool) $account->all_pages_header,
             'show_currency_code' => (bool) $account->show_currency_code,
@@ -271,9 +275,14 @@ class AccountTransformer extends EntityTransformer
             'reset_counter_frequency_id' => (int) $account->reset_counter_frequency_id,
             'payment_type_id' => (int) $account->payment_type_id,
             'gateway_fee_enabled' => (bool) $account->gateway_fee_enabled,
+            'send_item_details' => (bool) $account->send_item_details,
             'reset_counter_date' => $account->reset_counter_date,
             'custom_contact_label1' => $account->custom_contact_label1,
             'custom_contact_label2' => $account->custom_contact_label2,
+            'task_rate' => (float) $account->task_rate,
+            'inclusive_taxes' => (bool) $account->inclusive_taxes,
+            'convert_products' => (bool) $account->convert_products,
+            'signature_on_pdf' => (bool) $account->signature_on_pdf,
         ];
     }
 }

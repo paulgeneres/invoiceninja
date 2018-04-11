@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ProductRequest;
 use App\Models\Product;
 use App\Models\TaxRate;
 use App\Ninja\Datatables\ProductDatatable;
@@ -71,23 +72,39 @@ class ProductController extends BaseController
         return $this->productService->getDatatable(Auth::user()->account_id, Input::get('sSearch'));
     }
 
+    public function cloneProduct(ProductRequest $request, $publicId)
+    {
+        return self::edit($request, $publicId, true);
+    }
+
     /**
      * @param $publicId
      *
      * @return \Illuminate\Contracts\View\View
      */
-    public function edit($publicId)
+    public function edit(ProductRequest $request, $publicId, $clone = false)
     {
         $account = Auth::user()->account;
         $product = Product::scope($publicId)->withTrashed()->firstOrFail();
+
+        if ($clone) {
+            $product->id = null;
+            $product->public_id = null;
+            $product->deleted_at = null;
+            $url = 'products';
+            $method = 'POST';
+        } else {
+            $url = 'products/'.$publicId;
+            $method = 'PUT';
+        }
 
         $data = [
           'account' => $account,
           'taxRates' => $account->invoice_item_taxes ? TaxRate::scope()->whereIsInclusive(false)->get() : null,
           'product' => $product,
           'entity' => $product,
-          'method' => 'PUT',
-          'url' => 'products/'.$publicId,
+          'method' => $method,
+          'url' => $url,
           'title' => trans('texts.edit_product'),
         ];
 
@@ -149,7 +166,16 @@ class ProductController extends BaseController
         $message = $productPublicId ? trans('texts.updated_product') : trans('texts.created_product');
         Session::flash('message', $message);
 
-        return Redirect::to("products/{$product->public_id}/edit");
+        $action = request('action');
+        if (in_array($action, ['archive', 'delete', 'restore', 'invoice'])) {
+            return self::bulk();
+        }
+
+        if ($action == 'clone') {
+            return redirect()->to(sprintf('products/%s/clone', $product->public_id));
+        } else {
+            return redirect()->to("products/{$product->public_id}/edit");
+        }
     }
 
     /**
@@ -159,7 +185,17 @@ class ProductController extends BaseController
     {
         $action = Input::get('action');
         $ids = Input::get('public_id') ? Input::get('public_id') : Input::get('ids');
-        $count = $this->productService->bulk($ids, $action);
+
+        if ($action == 'invoice') {
+            $products = Product::scope($ids)->get();
+            $data = [];
+            foreach ($products as $product) {
+                $data[] = $product->product_key;
+            }
+            return redirect("invoices/create")->with('selectedProducts', $data);
+        } else {
+            $count = $this->productService->bulk($ids, $action);
+        }
 
         $message = Utils::pluralize($action.'d_product', $count);
         Session::flash('message', $message);

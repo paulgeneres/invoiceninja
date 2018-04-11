@@ -28,7 +28,8 @@ class ApiCheck
     {
         $loggingIn = $request->is('api/v1/login')
             || $request->is('api/v1/register')
-            || $request->is('api/v1/oauth_login');
+            || $request->is('api/v1/oauth_login')
+            || $request->is('api/v1/ios_subscription_status');
 
         $headers = Utils::getApiHeaders();
         $hasApiSecret = false;
@@ -53,7 +54,7 @@ class ApiCheck
             // check if user is archived
             if ($token && $token->user) {
                 Auth::onceUsingId($token->user_id);
-                Session::set('token_id', $token->id);
+                session(['token_id' => $token->id]);
             } elseif ($hasApiSecret && $request->is('api/v1/ping')) {
                 // do nothing: allow ping with api_secret or account token
             } else {
@@ -99,8 +100,8 @@ class ApiCheck
                 return Response::json("Please wait {$wait} second(s)", 403, $headers);
             }
 
-            Cache::put("hour_throttle:{$key}", $new_hour_throttle, 10);
-            Cache::put("last_api_request:{$key}", time(), 10);
+            Cache::put("hour_throttle:{$key}", $new_hour_throttle, 60);
+            Cache::put("last_api_request:{$key}", time(), 60);
         }
 
         return $next($request);

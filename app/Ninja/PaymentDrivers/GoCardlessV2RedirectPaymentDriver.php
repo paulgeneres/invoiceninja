@@ -2,6 +2,7 @@
 
 namespace App\Ninja\PaymentDrivers;
 
+use Omnipay;
 use Session;
 use App\Models\Payment;
 
@@ -12,11 +13,28 @@ class GoCardlessV2RedirectPaymentDriver extends BasePaymentDriver
     public function gatewayTypes()
     {
         $types = [
-            GATEWAY_TYPE_BANK_TRANSFER,
+            GATEWAY_TYPE_GOCARDLESS,
             GATEWAY_TYPE_TOKEN,
         ];
 
         return $types;
+    }
+
+    // Workaround for access_token/accessToken issue
+    protected function gateway()
+    {
+        if ($this->gateway) {
+            return $this->gateway;
+        }
+
+        $this->gateway = Omnipay::create($this->accountGateway->gateway->provider);
+
+        $config = (array) $this->accountGateway->getConfig();
+        $config['access_token'] = $config['accessToken'];
+        $config['secret'] = $config['webhookSecret'];
+        $this->gateway->initialize($config);
+
+        return $this->gateway;
     }
 
     protected function paymentDetails($paymentMethod = false)
@@ -109,6 +127,10 @@ class GoCardlessV2RedirectPaymentDriver extends BasePaymentDriver
             $payment = Payment::scope(false, $accountId)->where('transaction_reference', '=', $sourceRef)->first();
 
             if (! $payment) {
+                continue;
+            }
+
+            if ($payment->is_deleted || $payment->invoice->is_deleted) {
                 continue;
             }
 

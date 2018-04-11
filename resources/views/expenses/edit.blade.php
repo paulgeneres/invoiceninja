@@ -17,6 +17,7 @@
 	{!! Former::open($url)
             ->addClass('warn-on-exit main-form')
             ->onsubmit('return onFormSubmit(event)')
+            ->autocomplete('off')
             ->method($method) !!}
     <div style="display:none">
         {!! Former::text('action') !!}
@@ -55,7 +56,7 @@
                     {!! Former::select('expense_currency_id')->addOption('','')
                             ->data_bind('combobox: expense_currency_id')
                             ->label(trans('texts.currency_id'))
-                            ->data_placeholder(Utils::getFromCache($account->getCurrencyId(), 'currencies')->name)
+                            ->data_placeholder(Utils::getFromCache($account->getCurrencyId(), 'currencies')->getTranslatedName())
                             ->fromQuery($currencies, 'name', 'id') !!}
 
                     @if (! $isRecurring)
@@ -271,7 +272,7 @@
 
         function onFormSubmit(event) {
             if (window.countUploadingDocuments > 0) {
-                swal("{!! trans('texts.wait_for_upload') !!}");
+                swal({!! json_encode(trans('texts.wait_for_upload')) !!});
                 return false;
             }
 
@@ -287,6 +288,7 @@
             var client = clientMap[clientId];
             if (client) {
                 model.invoice_currency_id(client.currency_id);
+                model.updateExchangeRate();
             }
         }
 
@@ -350,9 +352,15 @@
                 }
                 $clientSelect.append(new Option(clientName, client.public_id));
             }
-            $clientSelect.combobox().change(function() {
+            $clientSelect.combobox({highlighter: comboboxHighlighter}).change(function() {
                 onClientChange();
             });
+
+            $('#invoice_currency_id, #expense_currency_id').on('change', function() {
+                setTimeout(function() {
+                    model.updateExchangeRate();
+                }, 1);
+            })
 
             @if ($data)
                 // this means we failed so we'll reload the previous state
@@ -471,10 +479,26 @@
                     return roundToTwo(self.amount() * self.exchange_rate()).toFixed(2);
                 },
                 write: function(value) {
-                    self.amount(roundToTwo(value / self.exchange_rate()));
+                    // When changing the converted amount we're updating
+                    // the exchange rate rather than change the amount
+                    self.exchange_rate(roundSignificant(NINJA.parseFloat(value) / self.amount()));
+                    //self.amount(roundToTwo(value / self.exchange_rate()));
                 }
             }, self);
 
+            self.updateExchangeRate = function() {
+                var fromCode = self.expenseCurrencyCode();
+                var toCode = self.invoiceCurrencyCode();
+                if (currencyMap[fromCode].exchange_rate && currencyMap[toCode].exchange_rate) {
+                    var rate = fx.convert(1, {
+                        from: fromCode,
+                        to: toCode,
+                    });
+                    self.exchange_rate(roundToFour(rate, true));
+                } else {
+                    self.exchange_rate(1);
+                }
+            }
 
             self.getCurrency = function(currencyId) {
                 return currencyMap[currencyId || self.account_currency_id()];

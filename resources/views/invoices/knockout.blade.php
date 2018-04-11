@@ -25,19 +25,16 @@ function ViewModel(data) {
     }
 
     self.setDueDate = function() {
-        @if ($entityType == ENTITY_INVOICE)
-            var paymentTerms = parseInt(self.invoice().client().payment_terms());
-            if (paymentTerms && paymentTerms != 0 && !self.invoice().due_date())
-            {
-                if (paymentTerms == -1) paymentTerms = 0;
-                var dueDate = $('#invoice_date').datepicker('getDate');
-                dueDate.setDate(dueDate.getDate() + paymentTerms);
-                dueDate = moment(dueDate).format("{{ $account->getMomentDateFormat() }}");
-                $('#due_date').attr('placeholder', dueDate);
-            } else {
-                $('#due_date').attr('placeholder', "{{ $invoice->id || $invoice->isQuote() ? ' ' : $account->present()->dueDatePlaceholder() }}");
-            }
-        @endif
+        var paymentTerms = parseInt(self.invoice().client().payment_terms());
+        if (paymentTerms && paymentTerms != 0 && !self.invoice().due_date()) {
+            if (paymentTerms == -1) paymentTerms = 0;
+            var dueDate = $('#invoice_date').datepicker('getDate');
+            dueDate.setDate(dueDate.getDate() + paymentTerms);
+            dueDate = moment(dueDate).format("{{ $account->getMomentDateFormat() }}");
+            $('#due_date').attr('placeholder', dueDate);
+        } else {
+            $('#due_date').attr('placeholder', "{{ $invoice->id ? ' ' : $account->present()->dueDatePlaceholder() }}");
+        }
     }
 
     self.clearBlankContacts = function() {
@@ -52,7 +49,6 @@ function ViewModel(data) {
 
     self.invoice_taxes = ko.observable({{ Auth::user()->account->invoice_taxes ? 'true' : 'false' }});
     self.invoice_item_taxes = ko.observable({{ Auth::user()->account->invoice_item_taxes ? 'true' : 'false' }});
-    self.show_item_taxes = ko.observable({{ Auth::user()->account->show_item_taxes ? 'true' : 'false' }});
 
     self.mapping = {
         'invoice': {
@@ -257,6 +253,7 @@ function InvoiceModel(data) {
     self.partial = ko.observable(0);
     self.has_tasks = ko.observable();
     self.has_expenses = ko.observable();
+    self.partial_due_date = ko.observable('');
 
     self.custom_value1 = ko.observable(0);
     self.custom_value2 = ko.observable(0);
@@ -309,9 +306,6 @@ function InvoiceModel(data) {
             return false;
         }
         var itemModel = new ItemModel();
-        @if ($account->hide_quantity)
-            itemModel.qty(1);
-        @endif
         if (isTask) {
             itemModel.invoice_item_type_id({{ INVOICE_ITEM_TYPE_TASK }});
             self.invoice_items_with_tasks.push(itemModel);
@@ -349,6 +343,7 @@ function InvoiceModel(data) {
             return self.tax_rate1IsInclusive() + ' ' + self.tax_rate1() + ' ' + self.tax_name1();
         },
         write: function(value) {
+            value = value || '';
             var parts = value.split(' ');
             self.tax_rate1IsInclusive(parts.shift());
             self.tax_rate1(parts.shift());
@@ -361,6 +356,7 @@ function InvoiceModel(data) {
             return self.tax_rate2IsInclusive() + ' ' + self.tax_rate2() + ' ' + self.tax_name2();
         },
         write: function(value) {
+            value = value || '';
             var parts = value.split(' ');
             self.tax_rate2IsInclusive(parts.shift());
             self.tax_rate2(parts.shift());
@@ -378,8 +374,15 @@ function InvoiceModel(data) {
     }
 
     self.formatMoney = function(amount) {
+        /*
         var client = $.parseJSON(ko.toJSON(self.client()));
         return formatMoneyAccount(amount, self.account, client);
+        */
+
+        var currencyId = (self.client().currency_id() || account.currency_id) || {{ DEFAULT_CURRENCY }};
+        var countryId = (self.client().country_id() || account.country_id) || {{ DEFAULT_COUNTRY }};
+        var decorator = parseInt(account.show_currency_code) ? 'code' : 'symbol';
+        return formatMoney(amount, currencyId, countryId, decorator);
     }
 
     self.totals = ko.observable();
@@ -403,7 +406,7 @@ function InvoiceModel(data) {
         if (parseInt(self.is_amount_discount())) {
             return roundToTwo(self.discount());
         } else {
-            return roundToTwo(self.totals.rawSubtotal() * self.discount() / 100);
+            return roundToTwo(self.totals.rawSubtotal() * roundToTwo(self.discount()) / 100);
         }
     });
 
@@ -429,10 +432,18 @@ function InvoiceModel(data) {
         }
 
         var taxRate1 = parseFloat(self.tax_rate1());
-        var tax1 = roundToTwo(total * (taxRate1/100));
+        @if ($account->inclusive_taxes)
+            var tax1 = roundToTwo(total - (total / (1 + (taxRate1 / 100))));
+        @else
+            var tax1 = roundToTwo(total * (taxRate1/100));
+        @endif
 
         var taxRate2 = parseFloat(self.tax_rate2());
-        var tax2 = roundToTwo(total * (taxRate2/100));
+        @if ($account->inclusive_taxes)
+            var tax2 = roundToTwo(total - (total / (1 + (taxRate2 / 100))));
+        @else
+            var tax2 = roundToTwo(total * (taxRate2/100));
+        @endif
 
         return self.formatMoney(tax1 + tax2);
     });
@@ -445,13 +456,17 @@ function InvoiceModel(data) {
             var lineTotal = item.totals.rawTotal();
             if (self.discount()) {
                 if (parseInt(self.is_amount_discount())) {
-                    lineTotal -= roundToTwo((lineTotal/total) * self.discount());
+                    lineTotal -= roundToTwo((lineTotal/total) * roundToTwo(self.discount()));
                 } else {
-                    lineTotal -= roundToTwo(lineTotal * self.discount() / 100);
+                    lineTotal -= roundToTwo(lineTotal * roundToTwo(self.discount()) / 100);
                 }
             }
 
-            var taxAmount = roundToTwo(lineTotal * item.tax_rate1() / 100);
+            @if ($account->inclusive_taxes)
+                var taxAmount = roundToTwo(lineTotal - (lineTotal / (1 + (item.tax_rate1() / 100))))
+            @else
+                var taxAmount = roundToTwo(lineTotal * item.tax_rate1() / 100);
+            @endif
             if (taxAmount) {
                 var key = item.tax_name1() + item.tax_rate1();
                 if (taxes.hasOwnProperty(key)) {
@@ -461,7 +476,11 @@ function InvoiceModel(data) {
                 }
             }
 
-            var taxAmount = roundToTwo(lineTotal * item.tax_rate2() / 100);
+            @if ($account->inclusive_taxes)
+                var taxAmount = roundToTwo(lineTotal - (lineTotal / (1 + (item.tax_rate2() / 100))))
+            @else
+                var taxAmount = roundToTwo(lineTotal * item.tax_rate2() / 100);
+            @endif
             if (taxAmount) {
                 var key = item.tax_name2() + item.tax_rate2();
                 if (taxes.hasOwnProperty(key)) {
@@ -533,19 +552,21 @@ function InvoiceModel(data) {
             total = NINJA.parseFloat(total) + customValue2;
         }
 
-        var taxAmount1 = roundToTwo(total * parseFloat(self.tax_rate1()) / 100);
-        var taxAmount2 = roundToTwo(total * parseFloat(self.tax_rate2()) / 100);
+        @if (! $account->inclusive_taxes)
+            var taxAmount1 = roundToTwo(total * parseFloat(self.tax_rate1()) / 100);
+            var taxAmount2 = roundToTwo(total * parseFloat(self.tax_rate2()) / 100);
 
-        total = NINJA.parseFloat(total) + taxAmount1 + taxAmount2;
-        total = roundToTwo(total);
+            total = NINJA.parseFloat(total) + taxAmount1 + taxAmount2;
+            total = roundToTwo(total);
 
-        var taxes = self.totals.itemTaxes();
-        for (var key in taxes) {
-            if (taxes.hasOwnProperty(key)) {
-                total += taxes[key].amount;
-                total = roundToTwo(total);
+            var taxes = self.totals.itemTaxes();
+            for (var key in taxes) {
+                if (taxes.hasOwnProperty(key)) {
+                    total += taxes[key].amount;
+                    total = roundToTwo(total);
+                }
             }
-        }
+        @endif
 
         if (customValue1 && !customTaxes1) {
             total = NINJA.parseFloat(total) + customValue1;
@@ -620,6 +641,17 @@ function InvoiceModel(data) {
         var isAmountDiscount = $('#is_amount_discount').val();
         localStorage.setItem('last:is_amount_discount', isAmountDiscount);
     }
+
+    self.isPartialSet = ko.computed(function() {
+        return self.partial() && self.partial() <= model.invoice().totals.rawTotal()
+    });
+
+    self.showPartialDueDate = ko.computed(function() {
+        if (self.is_quote()) {
+            return false;
+        }
+        return self.isPartialSet();
+    });
 }
 
 function ClientModel(data) {
@@ -677,7 +709,7 @@ function ClientModel(data) {
         if (self.contacts().length == 0) return;
         var contact = self.contacts()[0];
         if (contact.first_name() || contact.last_name()) {
-            return contact.first_name() + ' ' + contact.last_name();
+            return (contact.first_name() || '') + ' ' + (contact.last_name() || '');
         } else {
             return contact.email();
         }
@@ -687,7 +719,7 @@ function ClientModel(data) {
         if (self.contacts().length == 0) return '';
         var contact = self.contacts()[0];
         if (contact.first_name() || contact.last_name()) {
-            return contact.first_name() + ' ' + contact.last_name();
+            return (contact.first_name() || '') + ' ' + (contact.last_name() || '');
         } else {
             return contact.email();
         }
@@ -710,7 +742,7 @@ function ContactModel(data) {
     self.send_invoice = ko.observable(false);
     self.invitation_link = ko.observable('');
     self.invitation_status = ko.observable('');
-    self.invitation_openend = ko.observable(false);
+    self.invitation_opened = ko.observable(false);
     self.invitation_viewed = ko.observable(false);
     self.email_error = ko.observable('');
     self.invitation_signature_svg = ko.observable('');
@@ -760,7 +792,7 @@ function ContactModel(data) {
         if (self.invitation_link()) {
             // clicking adds 'silent=true' however it's removed when copying the link
             str += '<a href="' + self.invitation_link() + '" onclick="window.open(\'' + self.invitation_link()
-                    + '?silent=true\', \'_blank\');return false;">{{ trans('texts.view_as_recipient') }}</a>';
+                    + '?silent=true\', \'_blank\');return false;">{{ trans('texts.view_in_portal') }}</a>';
         }
         @endif
 
@@ -770,7 +802,7 @@ function ContactModel(data) {
     self.info_color = ko.computed(function() {
         if (self.invitation_viewed()) {
             return '#57D172';
-        } else if (self.invitation_openend()) {
+        } else if (self.invitation_opened()) {
             return '#FFCC00';
         } else {
             return '#B1B5BA';
@@ -795,7 +827,8 @@ function ItemModel(data) {
     self.product_key = ko.observable('');
     self.notes = ko.observable('');
     self.cost = ko.observable(0);
-    self.qty = ko.observable(0);
+    self.qty = ko.observable({{ $account->hasInvoiceField('product', 'product.quantity') ? 0 : 1 }});
+    self.discount = ko.observable();
     self.custom_value1 = ko.observable('');
     self.custom_value2 = ko.observable('');
     self.tax_name1 = ko.observable('');
@@ -818,6 +851,7 @@ function ItemModel(data) {
             return self.tax_rate1IsInclusive() + ' ' + self.tax_rate1() + ' ' + self.tax_name1();
         },
         write: function(value) {
+            value = value || '';
             var parts = value.split(' ');
             self.tax_rate1IsInclusive(parts.shift());
             self.tax_rate1(parts.shift());
@@ -830,6 +864,7 @@ function ItemModel(data) {
             return self.tax_rate2IsInclusive() + ' ' + self.tax_rate2() + ' ' + self.tax_name2();
         },
         write: function(value) {
+            value = value || '';
             var parts = value.split(' ');
             self.tax_rate2IsInclusive(parts.shift());
             self.tax_rate2(parts.shift());
@@ -857,23 +892,29 @@ function ItemModel(data) {
         owner: this
     });
 
-    if (data) {
+    self.loadData = function(data) {
         ko.mapping.fromJS(data, {}, this);
-        var precision = getPrecision(this.cost());
-        var cost = parseFloat(this.cost());
-        if (cost) {
-            this.cost(cost.toFixed(Math.max(2, precision)));
-        }
+        this.cost(roundSignificant(this.cost(), true));
         this.qty(roundSignificant(this.qty()));
+    }
+
+    if (data) {
+        self.loadData(data);
     }
 
     this.totals = ko.observable();
 
     this.totals.rawTotal = ko.computed(function() {
-        var cost = roundSignificant(NINJA.parseFloat(self.cost()));
-        var qty = roundSignificant(NINJA.parseFloat(self.qty()));
-        var value = cost * qty;
-        return value ? roundToTwo(value) : 0;
+        var value = roundSignificant(NINJA.parseFloat(self.cost()) * NINJA.parseFloat(self.qty()));
+        if (self.discount()) {
+            var discount = roundToTwo(NINJA.parseFloat(self.discount()));
+            if (parseInt(model.invoice().is_amount_discount())) {
+                value -= discount;
+            } else {
+                value -= roundToTwo(value * discount / 100);
+            }
+        }
+        return value ? roundSignificant(value) : 0;
     });
 
     this.totals.total = ko.computed(function() {
@@ -890,7 +931,7 @@ function ItemModel(data) {
     }
 
     this.isEmpty = function() {
-        return !self.product_key() && !self.notes() && !self.cost() && (!self.qty() || {{ $account->hide_quantity ? 'true' : 'false' }});
+        return !self.product_key() && !self.notes() && !self.cost();
     }
 
     this.onSelect = function() {}
@@ -997,10 +1038,10 @@ ko.bindingHandlers.productTypeahead = {
             limit: 50,
             templates: {
                 suggestion: function(item) { return '<div title="'
-                    + item.product_key + ': '
+                    + _.escape(item.product_key) + ': '
                     + item.cost + "\n"
                     + item.notes.substring(0, 60) + '">'
-                    + item.product_key + '</div>' }
+                    + _.escape(item.product_key) + '</div>' }
             },
             source: searchData(allBindings.items, allBindings.key)
         }).on('typeahead:select', function(element, datum, name) {
@@ -1009,13 +1050,41 @@ ko.bindingHandlers.productTypeahead = {
                 if (model.expense_public_id()) {
                     return;
                 }
-                if (datum.notes && (!model.notes() || !model.task_public_id())) {
+                if (datum.notes && (! model.notes() || ! model.isTask())) {
                     model.notes(datum.notes);
                 }
-                if (datum.cost) {
-                    model.cost(roundSignificant(datum.cost, 2));
+                if (parseFloat(datum.cost)) {
+                    if (! NINJA.parseFloat(model.cost()) || ! model.isTask()) {
+                        var cost = datum.cost;
+
+                        // optionally handle curency conversion
+                        @if ($account->convert_products)
+                            var client = window.model.invoice().client();
+                            if (client) {
+                                var clientCurrencyId = client.currency_id();
+                                var accountCurrencyId = {{ $account->getCurrencyId() }};
+                                if (clientCurrencyId && clientCurrencyId != accountCurrencyId) {
+                                    cost = fx.convert(cost, {
+                                        from: currencyMap[accountCurrencyId].code,
+                                        to: currencyMap[clientCurrencyId].code,
+                                    });
+                                    var rate = fx.convert(1, {
+                                        from: currencyMap[accountCurrencyId].code,
+                                        to: currencyMap[clientCurrencyId].code,
+                                    });
+                                    if ((account.custom_invoice_text_label1 || '').toLowerCase() == "{{ strtolower(trans('texts.exchange_rate')) }}") {
+                                        window.model.invoice().custom_text_value1(roundToFour(rate, true));
+                                    } else if ((account.custom_invoice_text_label2 || '').toLowerCase() == "{{ strtolower(trans('texts.exchange_rate')) }}") {
+                                        window.model.invoice().custom_text_value2(roundToFour(rate, true));
+                                    }
+                                }
+                            }
+                        @endif
+
+                        model.cost(roundToTwo(cost, true));
+                    }
                 }
-                if (!model.qty()) {
+                if (! model.qty() && ! model.isTask()) {
                     model.qty(1);
                 }
                 @if ($account->invoice_item_taxes)

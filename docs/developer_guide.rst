@@ -12,11 +12,11 @@ We try to follow the `PSR-2 <http://www.php-fig.org/psr/psr-2/>`_ style guidelin
 Code
 """"
 
-When setting up the app you can choose to either use the self hosted zip or checkout the code from GitHub. The zip includes all third party libraries, whereas checking out the code from GitHub requires using Composer and Bower.
+When setting up the app you can choose to either use the self hosted zip or checkout the code from GitHub. The zip includes all third party libraries, whereas checking out the code from GitHub requires using Composer.
 
-We use Gulp to concatenate the JavasScript and CSS files. After making any changes you need to run gulp to re-generate the files.
+We use Gulp to concatenate the JavasScript and CSS files. You can download the source files with Bower. After making any changes you need to run ``gulp`` to re-generate the built files.
 
-Most of the system tables are cached (ie, currencies, languages, etc). If you make any changes you need to clear the cache either by loading any page with ?clear_cache=true added at the end of the URL.
+Most of the system tables are cached (ie, currencies, languages, etc). If you make any changes you need to run ``php artisan db:seed --class=UpdateSeeder`` and then load any page with ?clear_cache=true added at the end of the URL.
 
 Database
 """"""""
@@ -44,5 +44,10 @@ To run the `Codeception <http://codeception.com/>`_ tests you’ll need to insta
 
 - Create config file: ``cp tests/_bootstrap.php.default tests/_bootstrap.php``
 - Create test user: ``php artisan db:seed --class=UserTableSeeder``
+- edit the following files, replacing ``www.ninja.test:8000`` with your local test domain:
+  - /.travis.ylm
+  - /app/Libraries/Utils.php
+  - /tests/acceptance.suite.yml
+  - /tests/functional.suite.yml
 - Start the PhantomJS web server: ``phantomjs --webdriver=4444``
 - Run the tests: ``sudo ./vendor/codeception/codeception/codecept run --debug``

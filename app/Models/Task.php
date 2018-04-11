@@ -80,6 +80,14 @@ class Task extends EntityModel
     }
 
     /**
+     * @return mixed
+     */
+    public function task_status()
+    {
+        return $this->belongsTo('App\Models\TaskStatus')->withTrashed();
+    }
+
+    /**
      * @param $task
      *
      * @return string
@@ -121,17 +129,27 @@ class Task extends EntityModel
      *
      * @return int
      */
-    public static function calcDuration($task)
+    public static function calcDuration($task, $startTimeCutoff = 0, $endTimeCutoff = 0)
     {
         $duration = 0;
         $parts = json_decode($task->time_log) ?: [];
 
         foreach ($parts as $part) {
+            $startTime = $part[0];
             if (count($part) == 1 || ! $part[1]) {
-                $duration += time() - $part[0];
+                $endTime = time();
             } else {
-                $duration += $part[1] - $part[0];
+                $endTime = $part[1];
             }
+
+            if ($startTimeCutoff) {
+                $startTime = max($startTime, $startTimeCutoff);
+            }
+            if ($endTimeCutoff) {
+                $endTime = min($endTime, $endTimeCutoff);
+            }
+
+            $duration += max($endTime - $startTime, 0);
         }
 
         return $duration;
@@ -140,9 +158,27 @@ class Task extends EntityModel
     /**
      * @return int
      */
-    public function getDuration()
+    public function getDuration($startTimeCutoff = 0, $endTimeCutoff = 0)
     {
-        return self::calcDuration($this);
+        return self::calcDuration($this, $startTimeCutoff, $endTimeCutoff);
+    }
+
+    /**
+     * @return float
+     */
+    public function getRate()
+    {
+        $value = 0;
+
+        if ($this->project && floatval($this->project->task_rate)) {
+            $value = $this->project->task_rate;
+        } elseif ($this->client && floatval($this->client->task_rate)) {
+            $value = $this->client->task_rate;
+        } else {
+            $value = $this->account->task_rate;
+        }
+
+        return Utils::roundSignificant($value);
     }
 
     /**
@@ -204,8 +240,11 @@ class Task extends EntityModel
 
     public function scopeDateRange($query, $startDate, $endDate)
     {
-        $query->whereRaw('cast(substring(time_log, 3, 10) as unsigned) >= ' . $startDate->format('U'));
-        $query->whereRaw('cast(substring(time_log, 3, 10) as unsigned) <= ' . $endDate->modify('+1 day')->format('U'));
+        $query->whereRaw('cast(substring(time_log, 3, 10) as unsigned) <= ' . $endDate->modify('+1 day')->format('U'))
+            ->whereRaw('case
+                when is_running then unix_timestamp()
+                else cast(substring(time_log, length(time_log) - 11, 10) as unsigned)
+            end >= ' . $startDate->format('U'));
 
         return $query;
     }
@@ -213,7 +252,17 @@ class Task extends EntityModel
     public static function getStatuses($entityType = false)
     {
         $statuses = [];
-        $statuses[TASK_STATUS_LOGGED] = trans('texts.logged');
+
+        $taskStatues = TaskStatus::scope()->orderBy('sort_order')->get();
+
+        foreach ($taskStatues as $status) {
+            $statuses[$status->public_id] = $status->name;
+        }
+
+        if (! $taskStatues->count()) {
+            $statuses[TASK_STATUS_LOGGED] = trans('texts.logged');
+        }
+
         $statuses[TASK_STATUS_RUNNING] = trans('texts.running');
         $statuses[TASK_STATUS_INVOICED] = trans('texts.invoiced');
         $statuses[TASK_STATUS_PAID] = trans('texts.paid');
@@ -221,21 +270,25 @@ class Task extends EntityModel
         return $statuses;
     }
 
-    public static function calcStatusLabel($isRunning, $balance, $invoiceNumber)
+    public static function calcStatusLabel($isRunning, $balance, $invoiceNumber, $taskStatus)
     {
         if ($invoiceNumber) {
             if (floatval($balance) > 0) {
-                $label = 'invoiced';
+                $label = trans('texts.invoiced');
             } else {
-                $label = 'paid';
+                $label = trans('texts.paid');
             }
-        } elseif ($isRunning) {
-            $label = 'running';
+        } elseif ($taskStatus) {
+            $label = $taskStatus;
         } else {
-            $label = 'logged';
+            $label = trans('texts.logged');
         }
 
-        return trans("texts.{$label}");
+        if ($isRunning) {
+            $label .= ' | ' . trans('texts.running');
+        }
+
+        return $label;
     }
 
     public static function calcStatusClass($isRunning, $balance, $invoiceNumber)
@@ -249,7 +302,7 @@ class Task extends EntityModel
         } elseif ($isRunning) {
             return 'primary';
         } else {
-            return 'warning';
+            return 'info';
         }
     }
 
@@ -276,7 +329,9 @@ class Task extends EntityModel
             $invoiceNumber = false;
         }
 
-        return static::calcStatusLabel($this->is_running, $balance, $invoiceNumber);
+        $taskStatus = $this->task_status ? $this->task_status->name : false;
+
+        return static::calcStatusLabel($this->is_running, $balance, $invoiceNumber, $taskStatus);
     }
 }
 

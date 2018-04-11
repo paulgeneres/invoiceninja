@@ -2,8 +2,8 @@
 
 namespace App\Exceptions;
 
-use Crawler;
 use Exception;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
@@ -28,10 +28,11 @@ class Handler extends ExceptionHandler
      */
     protected $dontReport = [
         TokenMismatchException::class,
-        //ModelNotFoundException::class,
+        ModelNotFoundException::class,
+        ValidationException::class,
+        \Illuminate\Validation\ValidationException::class,
         //AuthorizationException::class,
         //HttpException::class,
-        //ValidationException::class,
     ];
 
     /**
@@ -49,7 +50,12 @@ class Handler extends ExceptionHandler
             return false;
         }
 
-        if (Crawler::isCrawler()) {
+        // if these classes don't exist the install is broken, maybe due to permissions
+        if (! class_exists('Utils') || ! class_exists('Crawler')) {
+            return parent::report($e);
+        }
+
+        if (\Crawler::isCrawler()) {
             return false;
         }
 
@@ -62,7 +68,11 @@ class Handler extends ExceptionHandler
             }
             // Log 404s to a separate file
             $errorStr = date('Y-m-d h:i:s') . ' ' . $e->getMessage() . ' URL:' . request()->url() . "\n" . json_encode(Utils::prepareErrorData('PHP')) . "\n\n";
-            @file_put_contents(storage_path('logs/not-found.log'), $errorStr, FILE_APPEND);
+            if (config('app.log') == 'single') {
+                @file_put_contents(storage_path('logs/not-found.log'), $errorStr, FILE_APPEND);
+            } else {
+                Utils::logError('[not found] ' . $errorStr);
+            }
             return false;
         } elseif ($e instanceof HttpResponseException) {
             return false;
@@ -71,7 +81,11 @@ class Handler extends ExceptionHandler
         if (! Utils::isTravis()) {
             Utils::logError(Utils::getErrorString($e));
             $stacktrace = date('Y-m-d h:i:s') . ' ' . $e->getMessage() . ': ' . $e->getTraceAsString() . "\n\n";
-            @file_put_contents(storage_path('logs/stacktrace.log'), $stacktrace, FILE_APPEND);
+            if (config('app.log') == 'single') {
+                @file_put_contents(storage_path('logs/stacktrace.log'), $stacktrace, FILE_APPEND);
+            } else {
+                Utils::logError('[stacktrace] ' . $stacktrace);
+            }
             return false;
         } else {
             return parent::report($e);
@@ -90,6 +104,10 @@ class Handler extends ExceptionHandler
     {
         if ($e instanceof ModelNotFoundException) {
             return Redirect::to('/');
+        }
+
+        if (! class_exists('Utils')) {
+            return parent::render($request, $e);
         }
 
         if ($e instanceof TokenMismatchException) {
@@ -139,6 +157,7 @@ class Handler extends ExceptionHandler
         if (Utils::isNinjaProd()
             && ! Utils::isDownForMaintenance()
             && ! ($e instanceof HttpResponseException)
+            && ! ($e instanceof \Illuminate\Validation\ValidationException)
             && ! ($e instanceof ValidationException)) {
             $data = [
                 'error' => get_class($e),
@@ -149,5 +168,32 @@ class Handler extends ExceptionHandler
         } else {
             return parent::render($request, $e);
         }
+    }
+
+    /**
+     * Convert an authentication exception into an unauthenticated response.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \Illuminate\Auth\AuthenticationException  $exception
+     * @return \Illuminate\Http\Response
+     */
+    protected function unauthenticated($request, AuthenticationException $exception)
+    {
+        if ($request->expectsJson()) {
+            return response()->json(['error' => 'Unauthenticated.'], 401);
+        }
+
+        $guard = array_get($exception->guards(), 0);
+
+        switch ($guard) {
+            case 'client':
+                $url = '/client/login';
+                break;
+            default:
+                $url = '/login';
+                break;
+        }
+
+        return redirect()->guest($url);
     }
 }

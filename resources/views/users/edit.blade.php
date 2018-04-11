@@ -4,7 +4,7 @@
   @parent
   @include('accounts.nav', ['selected' => ACCOUNT_USER_MANAGEMENT])
 
-  {!! Former::open($url)->method($method)->addClass('warn-on-exit user-form')->rules(array(
+  {!! Former::open($url)->autocomplete('off')->method($method)->addClass('warn-on-exit user-form')->rules(array(
       'first_name' => 'required',
       'last_name' => 'required',
       'email' => 'required|email',
@@ -77,11 +77,11 @@
 </div>
 </div>
 
-  {!! Former::actions(
-      Button::normal(trans('texts.cancel'))->asLinkTo(URL::to('/settings/user_management'))->appendIcon(Icon::create('remove-circle'))->large(),
-      ($user) ? Button::success(trans('texts.save'))->withAttributes(['onclick' => 'submitAction("save")'])->large()->appendIcon(Icon::create('floppy-disk')) : false,
-      (! $user || ! $user->confirmed) ? Button::info(trans($user ? 'texts.resend_invite' : 'texts.send_invite'))->withAttributes(['onclick' => 'submitAction("email")'])->large()->appendIcon(Icon::create('send')) : false
-  )!!}
+  <center class="buttons">
+      {!! Button::normal(trans('texts.cancel'))->asLinkTo(URL::to('/settings/user_management'))->appendIcon(Icon::create('remove-circle'))->large() !!}
+      {!! ($user) ? Button::success(trans('texts.save'))->withAttributes(['onclick' => 'submitAction("save")'])->large()->appendIcon(Icon::create('floppy-disk')) : false !!}
+      {!! (! $user || ! $user->confirmed) ? Button::info(trans($user ? 'texts.resend_invite' : 'texts.send_invite'))->withAttributes(['onclick' => 'submitAction("email")'])->large()->appendIcon(Icon::create('send')) : false !!}
+  </center>
 
   {!! Former::close() !!}
 

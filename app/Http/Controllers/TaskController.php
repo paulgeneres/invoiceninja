@@ -16,6 +16,7 @@ use Auth;
 use DropdownButton;
 use Input;
 use Redirect;
+use Request;
 use Session;
 use URL;
 use Utils;
@@ -82,9 +83,9 @@ class TaskController extends BaseController
      *
      * @return \Illuminate\Http\JsonResponse
      */
-    public function getDatatable($clientPublicId = null)
+    public function getDatatable($clientPublicId = null, $projectPublicId = null)
     {
-        return $this->taskService->getDatatable($clientPublicId, Input::get('sSearch'));
+        return $this->taskService->getDatatable($clientPublicId, $projectPublicId, Input::get('sSearch'));
     }
 
     /**
@@ -148,8 +149,11 @@ class TaskController extends BaseController
     public function edit(TaskRequest $request)
     {
         $this->checkTimezone();
-
         $task = $request->entity();
+
+        if (! $task) {
+            return redirect('/');
+        }
 
         $actions = [];
         if ($task->invoice) {
@@ -186,7 +190,7 @@ class TaskController extends BaseController
             'datetimeFormat' => Auth::user()->account->getMomentDateTimeFormat(),
         ];
 
-        $data = array_merge($data, self::getViewModel());
+        $data = array_merge($data, self::getViewModel($task));
 
         return View::make('tasks.edit', $data);
     }
@@ -208,12 +212,12 @@ class TaskController extends BaseController
     /**
      * @return array
      */
-    private static function getViewModel()
+    private static function getViewModel($task = false)
     {
         return [
-            'clients' => Client::scope()->with('contacts')->orderBy('name')->get(),
+            'clients' => Client::scope()->withActiveOrSelected($task ? $task->client_id : false)->with('contacts')->orderBy('name')->get(),
             'account' => Auth::user()->account,
-            'projects' => Project::scope()->with('client.contacts')->orderBy('name')->get(),
+            'projects' => Project::scope()->withActiveOrSelected($task ? $task->project_id : false)->with('client.contacts')->orderBy('name')->get(),
         ];
     }
 
@@ -232,17 +236,22 @@ class TaskController extends BaseController
 
         $task = $this->taskRepo->save($publicId, $request->input());
 
-        if ($publicId) {
-            Session::flash('message', trans('texts.updated_task'));
-        } else {
-            Session::flash('message', trans('texts.created_task'));
-        }
-
         if (in_array($action, ['invoice', 'add_to_invoice'])) {
             return self::bulk();
         }
 
-        return Redirect::to("tasks/{$task->public_id}/edit");
+        if (request()->wantsJson()) {
+            $task->time_log = json_decode($task->time_log);
+            return $task->load(['client.contacts', 'project'])->toJson();
+        } else {
+            if ($publicId) {
+                Session::flash('message', trans('texts.updated_task'));
+            } else {
+                Session::flash('message', trans('texts.created_task'));
+            }
+
+            return Redirect::to("tasks/{$task->public_id}/edit");
+        }
     }
 
     /**
@@ -252,35 +261,35 @@ class TaskController extends BaseController
     {
         $action = Input::get('action');
         $ids = Input::get('public_id') ?: (Input::get('id') ?: Input::get('ids'));
+        $referer = Request::server('HTTP_REFERER');
 
         if (in_array($action, ['resume', 'stop'])) {
             $this->taskRepo->save($ids, ['action' => $action]);
-            return Redirect::to('tasks')->withMessage(trans($action == 'stop' ? 'texts.stopped_task' : 'texts.resumed_task'));
+            Session::flash('message', trans($action == 'stop' ? 'texts.stopped_task' : 'texts.resumed_task'));
+            return $this->returnBulk($this->entityType, $action, $ids);
         } elseif ($action == 'invoice' || $action == 'add_to_invoice') {
-            $tasks = Task::scope($ids)->with('client')->orderBy('project_id', 'id')->get();
+            $tasks = Task::scope($ids)->with('account', 'client', 'project')->orderBy('project_id', 'id')->get();
             $clientPublicId = false;
             $data = [];
 
             $lastProjectId = false;
             foreach ($tasks as $task) {
                 if ($task->client) {
+                    if ($task->client->trashed()) {
+                        return redirect($referer)->withError(trans('texts.client_must_be_active'));
+                    }
+
                     if (! $clientPublicId) {
                         $clientPublicId = $task->client->public_id;
                     } elseif ($clientPublicId != $task->client->public_id) {
-                        Session::flash('error', trans('texts.task_error_multiple_clients'));
-
-                        return Redirect::to('tasks');
+                        return redirect($referer)->withError(trans('texts.task_error_multiple_clients'));
                     }
                 }
 
                 if ($task->is_running) {
-                    Session::flash('error', trans('texts.task_error_running'));
-
-                    return Redirect::to('tasks');
+                    return redirect($referer)->withError(trans('texts.task_error_running'));
                 } elseif ($task->invoice_id) {
-                    Session::flash('error', trans('texts.task_error_invoiced'));
-
-                    return Redirect::to('tasks');
+                    return redirect($referer)->withError(trans('texts.task_error_invoiced'));
                 }
 
                 $account = Auth::user()->account;
@@ -289,6 +298,7 @@ class TaskController extends BaseController
                     'publicId' => $task->public_id,
                     'description' => $task->present()->invoiceDescription($account, $showProject),
                     'duration' => $task->getHours(),
+                    'cost' => $task->getRate(),
                 ];
                 $lastProjectId = $task->project_id;
             }
@@ -302,11 +312,14 @@ class TaskController extends BaseController
             }
         } else {
             $count = $this->taskService->bulk($ids, $action);
+            if (request()->wantsJson()) {
+                return response()->json($count);
+            } else {
+                $message = Utils::pluralize($action.'d_task', $count);
+                Session::flash('message', $message);
 
-            $message = Utils::pluralize($action.'d_task', $count);
-            Session::flash('message', $message);
-
-            return $this->returnBulk($this->entityType, $action, $ids);
+                return $this->returnBulk($this->entityType, $action, $ids);
+            }
         }
     }
 

@@ -23,10 +23,14 @@
 
 	@if ($client)
 		{!! Former::populate($client) !!}
+		{!! Former::populateField('task_rate', floatval($client->task_rate) ? Utils::roundSignificant($client->task_rate) : '') !!}
+		{!! Former::populateField('show_tasks_in_portal', intval($client->show_tasks_in_portal)) !!}
+		{!! Former::populateField('send_reminders', intval($client->send_reminders)) !!}
         {!! Former::hidden('public_id') !!}
 	@else
 		{!! Former::populateField('invoice_number_counter', 1) !!}
 		{!! Former::populateField('quote_number_counter', 1) !!}
+		{!! Former::populateField('send_reminders', 1) !!}
 		@if ($account->client_number_counter)
 			{!! Former::populateField('id_number', $account->getNextNumber()) !!}
 		@endif
@@ -38,7 +42,7 @@
 
         <div class="panel panel-default" style="min-height: 380px">
           <div class="panel-heading">
-            <h3 class="panel-title">{!! trans('texts.organization') !!}</h3>
+            <h3 class="panel-title">{!! trans('texts.details') !!}</h3>
           </div>
             <div class="panel-body">
 
@@ -50,10 +54,16 @@
 
 			@if (Auth::user()->hasFeature(FEATURE_INVOICE_SETTINGS))
 				@if ($customLabel1)
-					{!! Former::text('custom_value1')->label(e($customLabel1)) !!}
+					@include('partials.custom_field', [
+						'field' => 'custom_value1',
+						'label' => $customLabel1
+					])
 				@endif
 				@if ($customLabel2)
-					{!! Former::text('custom_value2')->label(e($customLabel2)) !!}
+					@include('partials.custom_field', [
+						'field' => 'custom_value2',
+						'label' => $customLabel2
+					])
 				@endif
 			@endif
 
@@ -67,19 +77,57 @@
             </div>
         </div>
 
-        <div class="panel panel-default">
+		<div class="panel panel-default">
           <div class="panel-heading">
             <h3 class="panel-title">{!! trans('texts.address') !!}</h3>
           </div>
             <div class="panel-body">
 
-			{!! Former::text('address1') !!}
-			{!! Former::text('address2') !!}
-			{!! Former::text('city') !!}
-			{!! Former::text('state') !!}
-			{!! Former::text('postal_code') !!}
-			{!! Former::select('country_id')->addOption('','')
-				->fromQuery($countries, 'name', 'id') !!}
+				<div role="tabpanel">
+					<ul class="nav nav-tabs" role="tablist" style="border: none">
+						<li role="presentation" class="active">
+							<a href="#billing_address" aria-controls="billing_address" role="tab" data-toggle="tab">{{ trans('texts.billing_address') }}</a>
+						</li>
+						<li role="presentation">
+							<a href="#shipping_address" aria-controls="shipping_address" role="tab" data-toggle="tab">{{ trans('texts.shipping_address') }}</a>
+						</li>
+					</ul>
+				</div>
+				<div class="tab-content" style="padding-top:24px;">
+					<div role="tabpanel" class="tab-pane active" id="billing_address">
+						{!! Former::text('address1') !!}
+						{!! Former::text('address2') !!}
+						{!! Former::text('city') !!}
+						{!! Former::text('state') !!}
+						{!! Former::text('postal_code') !!}
+						{!! Former::select('country_id')->addOption('','')
+							->fromQuery($countries, 'name', 'id') !!}
+
+						<div class="form-group" id="copyShippingDiv" style="display:none;">
+							<label for="city" class="control-label col-lg-4 col-sm-4"></label>
+							<div class="col-lg-8 col-sm-8">
+								{!! Button::normal(trans('texts.copy_shipping'))->small() !!}
+							</div>
+						</div>
+
+					</div>
+					<div role="tabpanel" class="tab-pane" id="shipping_address">
+						{!! Former::text('shipping_address1')->label('address1') !!}
+						{!! Former::text('shipping_address2')->label('address2') !!}
+						{!! Former::text('shipping_city')->label('city') !!}
+						{!! Former::text('shipping_state')->label('state') !!}
+						{!! Former::text('shipping_postal_code')->label('postal_code') !!}
+						{!! Former::select('shipping_country_id')->addOption('','')
+							->fromQuery($countries, 'name', 'id')->label('country_id') !!}
+
+						<div class="form-group" id="copyBillingDiv" style="display:none;">
+							<label for="city" class="control-label col-lg-4 col-sm-4"></label>
+							<div class="col-lg-8 col-sm-8">
+								{!! Button::normal(trans('texts.copy_billing'))->small() !!}
+							</div>
+						</div>
+					</div>
+				</div>
 
         </div>
         </div>
@@ -108,19 +156,25 @@
                         attr: {name: 'contacts[' + \$index() + '][phone]'}") !!}
 				@if ($account->hasFeature(FEATURE_CLIENT_PORTAL_PASSWORD) && $account->enable_portal_password)
 					{!! Former::password('password')->data_bind("value: password()?'-%unchanged%-':'', valueUpdate: 'afterkeydown',
-						attr: {name: 'contacts[' + \$index() + '][password]'}")->autocomplete('new-password') !!}
+						attr: {name: 'contacts[' + \$index() + '][password]'}")->autocomplete('new-password')->data_lpignore('true') !!}
 			    @endif
 
 				@if (Auth::user()->hasFeature(FEATURE_INVOICE_SETTINGS))
 					@if ($account->custom_contact_label1)
-						{!! Former::text('custom_contact1')->data_bind("value: custom_value1, valueUpdate: 'afterkeydown',
-								attr: {name: 'contacts[' + \$index() + '][custom_value1]'}")
-							->label(e($account->custom_contact_label1)) !!}
+						@include('partials.custom_field', [
+							'field' => 'custom_contact1',
+							'label' => $account->custom_contact_label1,
+							'databind' => "value: custom_value1, valueUpdate: 'afterkeydown',
+									attr: {name: 'contacts[' + \$index() + '][custom_value1]'}",
+						])
 					@endif
 					@if ($account->custom_contact_label2)
-						{!! Former::text('custom_contact2')->data_bind("value: custom_value2, valueUpdate: 'afterkeydown',
-								attr: {name: 'contacts[' + \$index() + '][custom_value2]'}")
-							->label(e($account->custom_contact_label2)) !!}
+						@include('partials.custom_field', [
+							'field' => 'custom_contact2',
+							'label' => $account->custom_contact_label2,
+							'databind' => "value: custom_value2, valueUpdate: 'afterkeydown',
+									attr: {name: 'contacts[' + \$index() + '][custom_value2]'}",
+						])
 					@endif
 				@endif
 
@@ -139,28 +193,64 @@
             </div>
 
 
-        <div class="panel panel-default">
+        <div class="panel panel-default" style="min-height:505px">
           <div class="panel-heading">
             <h3 class="panel-title">{!! trans('texts.additional_info') !!}</h3>
           </div>
             <div class="panel-body">
 
-            {!! Former::select('currency_id')->addOption('','')
-                ->placeholder($account->currency ? $account->currency->name : '')
-                ->fromQuery($currencies, 'name', 'id') !!}
-            {!! Former::select('language_id')->addOption('','')
-                ->placeholder($account->language ? trans('texts.lang_'.$account->language->name) : '')
-                ->fromQuery($languages, 'name', 'id') !!}
-			{!! Former::select('payment_terms')->addOption('','')
-				->fromQuery(\App\Models\PaymentTerm::getSelectOptions(), 'name', 'num_days')
-				->placeholder($account->present()->paymentTerms)
-                ->help(trans('texts.payment_terms_help')) !!}
-			{!! Former::select('size_id')->addOption('','')
-				->fromQuery($sizes, 'name', 'id') !!}
-			{!! Former::select('industry_id')->addOption('','')
-				->fromQuery($industries, 'name', 'id') !!}
-			{!! Former::textarea('public_notes') !!}
-			{!! Former::textarea('private_notes') !!}
+				<div role="tabpanel">
+					<ul class="nav nav-tabs" role="tablist" style="border: none">
+						<li role="presentation" class="active">
+							<a href="#settings" aria-controls="settings" role="tab" data-toggle="tab">{{ trans('texts.settings') }}</a>
+						</li>
+						<li role="presentation">
+							<a href="#notes" aria-controls="notes" role="tab" data-toggle="tab">{{ trans('texts.notes') }}</a>
+						</li>
+						<li role="presentation">
+							<a href="#classify" aria-controls="classify" role="tab" data-toggle="tab">{{ trans('texts.classify') }}</a>
+						</li>
+					</ul>
+				</div>
+				<div class="tab-content" style="padding-top:24px;">
+					<div role="tabpanel" class="tab-pane active" id="settings">
+						{!! Former::select('currency_id')->addOption('','')
+			                ->placeholder($account->currency ? trans('texts.currency_'.Str::slug($account->currency->name, '_')) : '')
+			                ->fromQuery($currencies, 'name', 'id') !!}
+			            {!! Former::select('language_id')->addOption('','')
+			                ->placeholder($account->language ? trans('texts.lang_'.$account->language->name) : '')
+			                ->fromQuery($languages, 'name', 'id') !!}
+						{!! Former::select('payment_terms')->addOption('','')
+							->fromQuery(\App\Models\PaymentTerm::getSelectOptions(), 'name', 'num_days')
+							->placeholder($account->present()->paymentTerms)
+			                ->help(trans('texts.payment_terms_help') . ' | ' . link_to('/settings/payment_terms', trans('texts.customize_options'))) !!}
+						@if ($account->isModuleEnabled(ENTITY_TASK))
+							{!! Former::text('task_rate')
+									->placeholder($account->present()->taskRate)
+									->help('task_rate_help') !!}
+							{!! Former::checkbox('show_tasks_in_portal')
+						        ->text(trans('texts.show_tasks_in_portal'))
+								->label('client_portal')
+						        ->value(1) !!}
+						@endif
+						@if ($account->hasReminders())
+							{!! Former::checkbox('send_reminders')
+								->text('send_client_reminders')
+								->label('reminders')
+								->value(1) !!}
+						@endif
+					</div>
+					<div role="tabpanel" class="tab-pane" id="notes">
+						{!! Former::textarea('public_notes')->rows(6) !!}
+						{!! Former::textarea('private_notes')->rows(6) !!}
+					</div>
+					<div role="tabpanel" class="tab-pane" id="classify">
+						{!! Former::select('size_id')->addOption('','')
+							->fromQuery($sizes, 'name', 'id') !!}
+						{!! Former::select('industry_id')->addOption('','')
+							->fromQuery($industries, 'name', 'id') !!}
+					</div>
+				</div>
 		</div>
 		</div>
 
@@ -227,8 +317,75 @@
 	<script type="text/javascript">
 
 	$(function() {
-		$('#country_id').combobox();
+		$('#country_id, #shipping_country_id').combobox();
+
+		// show/hide copy buttons if address is set
+		$('#billing_address').change(function() {
+			$('#copyBillingDiv').toggle(isAddressSet());
+		});
+		$('#shipping_address').change(function() {
+			$('#copyShippingDiv').toggle(isAddressSet(true));
+		});
+
+		// button handles to copy the address
+		$('#copyBillingDiv button').click(function() {
+			copyAddress();
+		});
+		$('#copyShippingDiv button').click(function() {
+			copyAddress(true);
+		});
+
+		// show/hide buttons based on loaded values
+		if ({{ $client && $client->hasAddress() ? 'true' : 'false' }}) {
+			$('#copyBillingDiv').show();
+		}
+		if ({{ $client && $client->hasAddress(true) ? 'true' : 'false' }}) {
+			$('#copyShippingDiv').show();
+		}
 	});
+
+	function copyAddress(shipping) {
+		var fields = [
+			'address1',
+			'address2',
+			'city',
+			'state',
+			'postal_code',
+			'country_id',
+		]
+		for (var i=0; i<fields.length; i++) {
+			var field1 = fields[i];
+			var field2 = 'shipping_' + field1;
+			if (shipping) {
+				$('#' + field1).val($('#' + field2).val());
+			} else {
+				$('#' + field2).val($('#' + field1).val());
+			}
+		}
+		$('#country_id').combobox('refresh');
+		$('#shipping_country_id').combobox('refresh');
+	}
+
+	function isAddressSet(shipping) {
+		var fields = [
+			'address1',
+			'address2',
+			'city',
+			'state',
+			'postal_code',
+			'country_id',
+		]
+		for (var i=0; i<fields.length; i++) {
+			var field = fields[i];
+			if (shipping) {
+				field = 'shipping_' + field;
+			}
+			if ($('#' + field).val()) {
+				return true;
+			}
+		}
+		return false;
+	}
 
 	function ContactModel(data) {
 		var self = this;
@@ -269,7 +426,7 @@
 			if (self.contacts().length == 0) return '';
 			var contact = self.contacts()[0];
 			if (contact.first_name() || contact.last_name()) {
-				return contact.first_name() + ' ' + contact.last_name();
+				return (contact.first_name() || '') + ' ' + (contact.last_name() || '');
 			} else {
 				return contact.email();
 			}

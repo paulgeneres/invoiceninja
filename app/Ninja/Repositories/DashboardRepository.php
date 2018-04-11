@@ -92,7 +92,7 @@ class DashboardRepository
             $record->lineTension = 0;
             $record->borderWidth = 4;
             $record->borderColor = "rgba({$color}, 1)";
-            $record->backgroundColor = "rgba({$color}, 0.05)";
+            $record->backgroundColor = "rgba({$color}, 0.1)";
             $datasets[] = $record;
 
             if ($entityType == ENTITY_INVOICE) {
@@ -159,7 +159,7 @@ class DashboardRepository
             $records->select(DB::raw('sum(expenses.amount + (expenses.amount * expenses.tax_rate1 / 100) + (expenses.amount * expenses.tax_rate2 / 100)) as total, count(expenses.id) as count, '.$timeframe.' as '.$groupBy));
         }
 
-        return $records->get();
+        return $records->get()->all();
     }
 
     public function totals($accountId, $userId, $viewAll)
@@ -309,13 +309,13 @@ class DashboardRepository
                     ->where('invoices.deleted_at', '=', null)
                     ->where('invoices.is_public', '=', true)
                     ->where('contacts.is_primary', '=', true)
-                    ->where('invoices.due_date', '<', date('Y-m-d'));
+                    ->where(DB::raw("coalesce(invoices.partial_due_date, invoices.due_date)"), '<', date('Y-m-d'));
 
         if (! $viewAll) {
             $pastDue = $pastDue->where('invoices.user_id', '=', $userId);
         }
 
-        return $pastDue->select(['invoices.due_date', 'invoices.balance', 'invoices.public_id', 'invoices.invoice_number', 'clients.name as client_name', 'contacts.email', 'contacts.first_name', 'contacts.last_name', 'clients.currency_id', 'clients.public_id as client_public_id', 'clients.user_id as client_user_id', 'invoice_type_id'])
+        return $pastDue->select([DB::raw("coalesce(invoices.partial_due_date, invoices.due_date) due_date"), 'invoices.balance', 'invoices.public_id', 'invoices.invoice_number', 'clients.name as client_name', 'contacts.email', 'contacts.first_name', 'contacts.last_name', 'clients.currency_id', 'clients.public_id as client_public_id', 'clients.user_id as client_user_id', 'invoice_type_id'])
                     ->orderBy('invoices.due_date', 'asc')
                     ->take(50)
                     ->get();
@@ -337,7 +337,7 @@ class DashboardRepository
                     ->where('invoices.is_public', '=', true)
                     ->where('contacts.is_primary', '=', true)
                     ->where(function($query) {
-                        $query->where('invoices.due_date', '>=', date('Y-m-d'))
+                        $query->where(DB::raw("coalesce(invoices.partial_due_date, invoices.due_date)"), '>=', date('Y-m-d'))
                             ->orWhereNull('invoices.due_date');
                     })
                     ->orderBy('invoices.due_date', 'asc');
@@ -347,7 +347,7 @@ class DashboardRepository
         }
 
         return $upcoming->take(50)
-                    ->select(['invoices.due_date', 'invoices.balance', 'invoices.public_id', 'invoices.invoice_number', 'clients.name as client_name', 'contacts.email', 'contacts.first_name', 'contacts.last_name', 'clients.currency_id', 'clients.public_id as client_public_id', 'clients.user_id as client_user_id', 'invoice_type_id'])
+                    ->select([DB::raw("coalesce(invoices.partial_due_date, invoices.due_date) due_date"), 'invoices.balance', 'invoices.public_id', 'invoices.invoice_number', 'clients.name as client_name', 'contacts.email', 'contacts.first_name', 'contacts.last_name', 'clients.currency_id', 'clients.public_id as client_public_id', 'clients.user_id as client_user_id', 'invoice_type_id'])
                     ->get();
     }
 

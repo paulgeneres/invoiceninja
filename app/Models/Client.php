@@ -52,9 +52,16 @@ class Client extends EntityModel
         'invoice_number_counter',
         'quote_number_counter',
         'public_notes',
+        'task_rate',
+        'shipping_address1',
+        'shipping_address2',
+        'shipping_city',
+        'shipping_state',
+        'shipping_postal_code',
+        'shipping_country_id',
+        'show_tasks_in_portal',
+        'send_reminders',
     ];
-
-
 
     /**
      * @return array
@@ -181,6 +188,14 @@ class Client extends EntityModel
     /**
      * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
      */
+    public function shipping_country()
+    {
+        return $this->belongsTo('App\Models\Country');
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     */
     public function currency()
     {
         return $this->belongsTo('App\Models\Currency');
@@ -247,7 +262,7 @@ class Client extends EntityModel
         // check if this client wasRecentlyCreated to ensure a new contact is
         // always created even if the request includes a contact id
         if (! $this->wasRecentlyCreated && $publicId && $publicId != '-1') {
-            $contact = Contact::scope($publicId)->firstOrFail();
+            $contact = Contact::scope($publicId)->whereClientId($this->id)->firstOrFail();
         } else {
             $contact = Contact::createNew();
             $contact->send_invoice = true;
@@ -336,7 +351,7 @@ class Client extends EntityModel
             return $this->name;
         }
 
-        if (! count($this->contacts)) {
+        if (! $this->contacts->count()) {
             return '';
         }
 
@@ -374,7 +389,7 @@ class Client extends EntityModel
     /**
      * @return bool
      */
-    public function hasAddress()
+    public function addressesMatch()
     {
         $fields = [
             'address1',
@@ -386,6 +401,32 @@ class Client extends EntityModel
         ];
 
         foreach ($fields as $field) {
+            if ($this->$field != $this->{'shipping_' . $field}) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @return bool
+     */
+    public function hasAddress($shipping = false)
+    {
+        $fields = [
+            'address1',
+            'address2',
+            'city',
+            'state',
+            'postal_code',
+            'country_id',
+        ];
+
+        foreach ($fields as $field) {
+            if ($shipping) {
+                $field = 'shipping_' . $field;
+            }
             if ($this->$field) {
                 return true;
             }
@@ -487,6 +528,20 @@ class Client extends EntityModel
 
         return $this->account->currency ? $this->account->currency->code : 'USD';
     }
+
+    public function getCountryCode()
+    {
+        if ($country = $this->country) {
+            return $country->iso_3166_2;
+        }
+
+        if (! $this->account) {
+            $this->load('account');
+        }
+
+        return $this->account->country ? $this->account->country->iso_3166_2 : 'US';
+    }
+
 
     /**
      * @param $isQuote

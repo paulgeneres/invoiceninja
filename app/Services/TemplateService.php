@@ -27,7 +27,15 @@ class TemplateService
         /** @var \App\Models\Invitation $invitation */
         $invitation = $data['invitation'];
 
-        $invoice = $invitation->invoice;
+        // check if it's a proposal
+        if ($invitation->proposal) {
+            $invoice = $invitation->proposal->invoice;
+            $entityType = ENTITY_PROPOSAL;
+        } else {
+            $invoice = $invitation->invoice;
+            $entityType = $invoice->getEntityType();
+        }
+
         $contact = $invitation->contact;
         $passwordHTML = isset($data['password']) ? '<p>'.trans('texts.password').': '.$data['password'].'<p>' : false;
         $documentsHTML = '';
@@ -44,8 +52,10 @@ class TemplateService
             '$footer' => $account->getEmailFooter(),
             '$emailSignature' => $account->getEmailFooter(),
             '$client' => $client->getDisplayName(),
+            '$idNumber' => $client->id_number,
+            '$vatNumber' => $client->vat_number,
             '$account' => $account->getDisplayName(),
-            '$dueDate' => $account->formatDate($invoice->due_date),
+            '$dueDate' => $account->formatDate($invoice->partial_due_date ?: $invoice->due_date),
             '$invoiceDate' => $account->formatDate($invoice->invoice_date),
             '$contact' => $contact->getDisplayName(),
             '$firstName' => $contact->first_name,
@@ -59,7 +69,7 @@ class TemplateService
             '$link' => $invitation->getLink(),
             '$password' => $passwordHTML,
             '$viewLink' => $invitation->getLink().'$password',
-            '$viewButton' => Form::emailViewButton($invitation->getLink(), $invoice->getEntityType()).'$password',
+            '$viewButton' => Form::emailViewButton($invitation->getLink(), $entityType).'$password',
             '$paymentLink' => $invitation->getLink('payment').'$password',
             '$paymentButton' => Form::emailPaymentButton($invitation->getLink('payment')).'$password',
             '$customClient1' => $client->custom_value1,

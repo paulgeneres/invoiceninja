@@ -92,19 +92,19 @@ class NinjaController extends BaseController
     public function show_license_payment()
     {
         if (Input::has('return_url')) {
-            Session::set('return_url', Input::get('return_url'));
+            session(['return_url' => Input::get('return_url')]);
         }
 
         if (Input::has('affiliate_key')) {
             if ($affiliate = Affiliate::where('affiliate_key', '=', Input::get('affiliate_key'))->first()) {
-                Session::set('affiliate_id', $affiliate->id);
+                session(['affiliate_id' => $affiliate->id]);
             }
         }
 
         if (Input::has('product_id')) {
-            Session::set('product_id', Input::get('product_id'));
+            session(['product_id' => Input::get('product_id')]);
         } elseif (! Session::has('product_id')) {
-            Session::set('product_id', PRODUCT_ONE_CLICK_INSTALL);
+            session(['product_id' => PRODUCT_ONE_CLICK_INSTALL]);
         }
 
         if (! Session::get('affiliate_id')) {
@@ -112,7 +112,7 @@ class NinjaController extends BaseController
         }
 
         if (Utils::isNinjaDev() && Input::has('test_mode')) {
-            Session::set('test_mode', Input::get('test_mode'));
+            session(['test_mode' => Input::get('test_mode')]);
         }
 
         $account = $this->accountRepo->getNinjaAccount();
@@ -258,12 +258,7 @@ class NinjaController extends BaseController
             if ($productId == PRODUCT_INVOICE_DESIGNS) {
                 return file_get_contents(storage_path() . '/invoice_designs.txt');
             } else {
-                // temporary fix to enable previous version to work
-                if (Input::get('get_date')) {
-                    return $license->created_at->format('Y-m-d');
-                } else {
-                    return 'valid';
-                }
+                return $license->created_at->format('Y-m-d');
             }
         } else {
             return RESULT_FAILURE;
@@ -299,6 +294,7 @@ class NinjaController extends BaseController
         }
 
         $user = Auth::user();
+        $account = $user->account;
         $url = NINJA_APP_URL . '/buy_now';
         $contactKey = $user->primaryAccount()->account_key;
 
@@ -306,9 +302,17 @@ class NinjaController extends BaseController
             'account_key' => NINJA_LICENSE_ACCOUNT_KEY,
             'contact_key' => $contactKey,
             'product_id' => PRODUCT_WHITE_LABEL,
-            'first_name' => Auth::user()->first_name,
-            'last_name' => Auth::user()->last_name,
-            'email' => Auth::user()->email,
+            'first_name' => $user->first_name,
+            'last_name' => $user->last_name,
+            'email' => $user->email,
+            'name' => $account->name,
+            'address1' => $account->address1,
+            'address2' => $account->address2,
+            'city' => $account->city,
+            'state' => $account->state,
+            'postal_code' => $account->postal_code,
+            'country_id' => $account->country_id,
+            'vat_number' => $account->vat_number,
             'return_link' => true,
         ];
 

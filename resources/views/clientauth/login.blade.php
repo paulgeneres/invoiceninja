@@ -2,11 +2,11 @@
 
 @section('form')
 
-    @include('partials.warn_session', ['redirectTo' => '/client/sessionexpired'])
+    @include('partials.warn_session', ['redirectTo' => '/client/session_expired'])
 
     <div class="container">
 
-        {!! Former::open('client/login')
+        {!! Former::open()
             ->rules(['password' => 'required'])
             ->addClass('form-signin') !!}
 
@@ -37,6 +37,9 @@
         {{ Former::populateField('remember', 'true') }}
 
         <div>
+            @if (! session('contact_key'))
+                {!! Former::text('email')->placeholder(trans('texts.email'))->raw() !!}
+            @endif
             {!! Former::password('password')->placeholder(trans('texts.password'))->raw() !!}
         </div>
         {!! Former::hidden('remember')->raw() !!}
@@ -47,7 +50,7 @@
 
         <div class="row meta">
             <div class="col-md-12 col-sm-12" style="text-align:center;padding-top:8px;">
-                {!! link_to('/client/recover_password', trans('texts.recover_password')) !!}
+                {!! link_to('/client/recover_password' . (request()->account_key ? '?account_key=' . request()->account_key : ''), trans('texts.recover_password')) !!}
             </div>
         </div>
         {!! Former::close() !!}

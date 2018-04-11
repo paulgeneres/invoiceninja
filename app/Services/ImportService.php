@@ -393,12 +393,14 @@ class ImportService
             }
         }
 
+        /*
         // if the invoice number is blank we'll assign it
         if ($entityType == ENTITY_INVOICE && ! $data['invoice_number']) {
             $account = Auth::user()->account;
             $invoice = Invoice::createNew();
             $data['invoice_number'] = $account->getNextNumber($invoice);
         }
+        */
 
         if (EntityModel::validate($data, $entityType) !== true) {
             return false;
@@ -443,7 +445,9 @@ class ImportService
         // update the entity maps
         if ($entityType != ENTITY_CUSTOMER) {
             $mapFunction = 'add' . ucwords($entity->getEntityType()) . 'ToMaps';
-            $this->$mapFunction($entity);
+            if (method_exists($this, $mapFunction)) {
+                $this->$mapFunction($entity);
+            }
         }
 
         // if the invoice is paid we'll also create a payment record
@@ -524,7 +528,6 @@ class ImportService
 
         if ($resource = $paymentTransformer->transform($row)) {
             $data = $this->fractal->createData($resource)->toArray();
-            $data['amount'] = min($data['amount'], Utils::parseFloat($row->amount));
             $data['invoice_id'] = $invoicePublicId;
             if (Payment::validate($data) === true) {
                 $data['invoice_id'] = $invoiceId;
@@ -648,7 +651,8 @@ class ImportService
     private function getCsvData($fileName)
     {
         $this->checkForFile($fileName);
-        $data = array_map('str_getcsv', file($fileName));
+        $file = file_get_contents($fileName);
+        $data = array_map("str_getcsv", preg_split('/\r*\n+|\r+/', $file));
 
         if (count($data) > 0) {
             $headers = $data[0];
@@ -810,7 +814,9 @@ class ImportService
                 continue;
             }
 
-            $obj->$field = $data[$index];
+            if (isset($data[$index])) {
+                $obj->$field = $data[$index];
+            }
         }
 
         return $obj;
@@ -927,6 +933,7 @@ class ImportService
     private function addInvoiceToMaps(Invoice $invoice)
     {
         if ($number = strtolower(trim($invoice->invoice_number))) {
+            $this->maps['invoices'][$number] = $invoice;
             $this->maps['invoice'][$number] = $invoice->id;
             $this->maps['invoice_client'][$number] = $invoice->client_id;
             $this->maps['invoice_ids'][$invoice->public_id] = $invoice->id;
@@ -942,7 +949,7 @@ class ImportService
             $this->maps['client'][$name] = $client->id;
             $this->maps['client_ids'][$client->public_id] = $client->id;
         }
-        if (count($client->contacts) && $name = strtolower(trim($client->contacts[0]->email))) {
+        if ($client->contacts->count() && $name = strtolower(trim($client->contacts[0]->email))) {
             $this->maps['client'][$name] = $client->id;
             $this->maps['client_ids'][$client->public_id] = $client->id;
         }

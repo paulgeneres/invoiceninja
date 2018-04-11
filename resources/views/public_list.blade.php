@@ -48,12 +48,14 @@
                 {!! Button::primary(trans("texts.recurring_invoices"))->asLinkTo(URL::to('/client/invoices/recurring')) !!}
             </div>
         @endif
+
         <h3>{{ $title }}</h3>
 
 		{!! Datatable::table()
 	    	->addColumn($columns)
 	    	->setUrl(route('api.client.' . $entityType . 's'))
 	    	->setOptions('sPaginationType', 'bootstrap')
+			->setOptions('aaSorting', [[$sortColumn, 'desc']])
 	    	->render('datatable') !!}
 	</div>
 

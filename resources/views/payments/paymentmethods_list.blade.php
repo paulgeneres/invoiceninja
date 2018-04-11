@@ -78,13 +78,15 @@
 @endif
 
 @if ($invitationKey = $client->firstInvitationKey())
-    <h3>
-        {{ trans('texts.payment_methods') }}
+    <h3 style="margin-top:0px;">
+        <span style="padding-top:4px">
+            {{ trans('texts.payment_methods') }}
+        </span>
         @if ($account->getGatewayByType(GATEWAY_TYPE_CREDIT_CARD)
             && $account->getGatewayByType(GATEWAY_TYPE_TOKEN)
             && $account->token_billing_type_id != TOKEN_BILLING_DISABLED)
             &nbsp;&nbsp;
-            {!! Button::success(strtoupper(trans(!empty($paymentMethods) && count($paymentMethods) ? 'texts.update_credit_card' : 'texts.add_credit_card')))->asLinkTo(URL::to("/payment/$invitationKey/credit_card?update=true")) !!}
+            {!! Button::success(strtoupper(trans(!empty($paymentMethods) && count($paymentMethods) ? 'texts.update_credit_card' : 'texts.add_credit_card')))->asLinkTo(URL::to("/payment/$invitationKey/credit_card?capture=true")) !!}
         @endif
     </h3>
 

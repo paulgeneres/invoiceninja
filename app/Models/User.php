@@ -11,6 +11,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Laracasts\Presenter\PresentableTrait;
 use Session;
 use App\Models\LookupUser;
+use Illuminate\Notifications\Notifiable;
 
 /**
  * Class User.
@@ -19,6 +20,7 @@ class User extends Authenticatable
 {
     use PresentableTrait;
     use SoftDeletes;
+    use Notifiable;
 
     /**
      * @var string
@@ -59,7 +61,17 @@ class User extends Authenticatable
      *
      * @var array
      */
-    protected $hidden = ['password', 'remember_token', 'confirmation_code'];
+    protected $hidden = [
+        'password',
+        'remember_token',
+        'confirmation_code',
+        'oauth_user_id',
+        'oauth_provider_id',
+        'google_2fa_secret',
+        'google_2fa_phone',
+        'remember_2fa_token',
+        'slack_webhook_url',
+    ];
 
     /**
      * @var array
@@ -125,6 +137,26 @@ class User extends Authenticatable
     }
 
     /**
+     * @return mixed
+     */
+    public function isTrusted()
+    {
+        if (Utils::isSelfHost()) {
+            true;
+        }
+
+        return $this->account->isPro() && ! $this->account->isTrial();
+    }
+
+    /**
+     * @return mixed
+     */
+    public function hasActivePromo()
+    {
+        return $this->account->hasActivePromo();
+    }
+
+    /**
      * @param $feature
      *
      * @return mixed
@@ -160,7 +192,7 @@ class User extends Authenticatable
         } elseif ($this->email) {
             return $this->email;
         } else {
-            return 'Guest';
+            return trans('texts.guest');
         }
     }
 
@@ -288,9 +320,7 @@ class User extends Authenticatable
      */
     public function isEmailBeingChanged()
     {
-        return Utils::isNinjaProd()
-                && $this->email != $this->getOriginal('email')
-                && $this->getOriginal('confirmed');
+        return Utils::isNinjaProd() && $this->email != $this->getOriginal('email');
     }
 
      /**
@@ -410,6 +440,35 @@ class User extends Authenticatable
     public function primaryAccount()
     {
         return $this->account->company->accounts->sortBy('id')->first();
+    }
+
+    public function sendPasswordResetNotification($token)
+    {
+        //$this->notify(new ResetPasswordNotification($token));
+        app('App\Ninja\Mailers\UserMailer')->sendPasswordReset($this, $token);
+    }
+
+    public function routeNotificationForSlack()
+    {
+        return $this->slack_webhook_url;
+    }
+
+    public function hasAcceptedLatestTerms()
+    {
+        if (! NINJA_TERMS_VERSION) {
+            return true;
+        }
+
+        return $this->accepted_terms_version == NINJA_TERMS_VERSION;
+    }
+
+    public function acceptLatestTerms($ip)
+    {
+        $this->accepted_terms_version = NINJA_TERMS_VERSION;
+        $this->accepted_terms_timestamp = date('Y-m-d H:i:s');
+        $this->accepted_terms_ip = $ip;
+
+        return $this;
     }
 }
 

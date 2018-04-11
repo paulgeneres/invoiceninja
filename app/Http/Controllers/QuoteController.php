@@ -97,7 +97,7 @@ class QuoteController extends BaseController
 
         return [
           'entityType' => ENTITY_QUOTE,
-          'account' => $account,
+          'account' => Auth::user()->account->load('country'),
           'products' => Product::scope()->orderBy('product_key')->get(),
           'taxRateOptions' => $account->present()->taxRateOptions,
           'clients' => Client::scope()->with('contacts', 'country')->orderBy('name')->get(),
@@ -108,7 +108,7 @@ class QuoteController extends BaseController
           'invoiceFonts' => Cache::get('fonts'),
           'invoiceLabels' => Auth::user()->account->getInvoiceLabels(),
           'isRecurring' => false,
-          'expenses' => [],
+          'expenses' => collect(),
         ];
     }
 
@@ -148,10 +148,24 @@ class QuoteController extends BaseController
     {
         $invitation = Invitation::with('invoice.invoice_items', 'invoice.invitations')->where('invitation_key', '=', $invitationKey)->firstOrFail();
         $invoice = $invitation->invoice;
+        $account = $invoice->account;
 
-        $invitationKey = $this->invoiceService->approveQuote($invoice, $invitation);
-        Session::flash('message', trans('texts.quote_is_approved'));
+        if ($account->requiresAuthorization($invoice) && ! session('authorized:' . $invitation->invitation_key)) {
+            return redirect()->to('view/' . $invitation->invitation_key);
+        }
 
-        return Redirect::to("view/{$invitationKey}");
+        if ($invoice->due_date) {
+            $carbonDueDate = \Carbon::parse($invoice->due_date);
+            if (! $carbonDueDate->isToday() && ! $carbonDueDate->isFuture()) {
+                return redirect("view/{$invitationKey}")->withError(trans('texts.quote_has_expired'));
+            }
+        }
+
+        if ($invoiceInvitationKey = $this->invoiceService->approveQuote($invoice, $invitation)) {
+            Session::flash('message', trans('texts.quote_is_approved'));
+            return Redirect::to("view/{$invoiceInvitationKey}");
+        } else {
+            return Redirect::to("view/{$invitationKey}");
+        }
     }
 }

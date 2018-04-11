@@ -63,6 +63,9 @@ class PaymentRepository extends BaseRepository
                         'payments.email',
                         'payments.routing_number',
                         'payments.bank_name',
+                        'payments.private_notes',
+                        'payments.exchange_rate',
+                        'payments.exchange_currency_id',
                         'invoices.is_deleted as invoice_is_deleted',
                         'gateways.name as gateway_name',
                         'gateways.id as gateway_id',
@@ -186,12 +189,7 @@ class PaymentRepository extends BaseRepository
             $payment->payment_date = date('Y-m-d');
         }
 
-        if (isset($input['transaction_reference'])) {
-            $payment->transaction_reference = trim($input['transaction_reference']);
-        }
-        if (isset($input['private_notes'])) {
-            $payment->private_notes = trim($input['private_notes']);
-        }
+        $payment->fill($input);
 
         if (! $publicId) {
             $clientId = $input['client_id'];

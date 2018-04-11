@@ -293,7 +293,7 @@
                     {{ $client->getCityState() }}<br/>
                 @endif
                 @if ($client->country)
-                    {{ $client->country->name }}<br/>
+                    {{ $client->country->getName() }}<br/>
                 @endif
                 <br>
                 @if ($contact->email)
@@ -341,13 +341,23 @@
             </div>
         </div>
 
-        @if (!empty($account->getTokenGatewayId()))
-                <div class="row">
-                    <div class="col-xs-12">
-                    @include('payments.paymentmethods_list')
+        <div class="row">
+            <div class="col-xs-12">
+                @if (!empty($account->getTokenGatewayId()))
+                    <div class="pull-left">
+                        @include('payments.paymentmethods_list')
+                    </div>
+                @endif
+                <div class="pull-right">
+                    @if ($client->hasRecurringInvoices())
+                        {!! Button::primary(strtoupper(trans("texts.recurring")))->asLinkTo(URL::to('/client/invoices/recurring')) !!}
+                    @endif
+                    {!! Button::success(strtoupper(trans("texts.edit_details")))->asLinkTo(URL::to('/client/details'))->withAttributes(['id' => 'editDetailsButton']) !!}
                 </div>
+            </div>
         </div>
-        @endif
+
+        <br/>
 
         <div class="row" id="account-row">
             <div class="col-md-2 invoices-from">
@@ -371,7 +381,7 @@
                     {{ $account->getCityState() }}<br/>
                 @endif
                 @if ($account->country)
-                    {{ $account->country->name }}
+                    {{ $account->country->getName() }}
                 @endif
             </div>
             <div class="col-md-3 phone-web-details">

@@ -17,7 +17,9 @@ class InvoiceTransformer extends BaseTransformer
      */
     public function transform($data)
     {
-        if (! $this->getClientId($data->name)) {
+        $clientId = $this->getClientId($data->email) ?: $this->getClientId($data->name);
+
+        if (! $clientId) {
             return false;
         }
 
@@ -25,9 +27,9 @@ class InvoiceTransformer extends BaseTransformer
             return false;
         }
 
-        return new Item($data, function ($data) {
+        return new Item($data, function ($data) use ($clientId) {
             return [
-                'client_id' => $this->getClientId($data->name),
+                'client_id' => $clientId,
                 'invoice_number' => isset($data->invoice_number) ? $this->getInvoiceNumber($data->invoice_number) : null,
                 'paid' => $this->getFloat($data, 'paid'),
                 'po_number' => $this->getString($data, 'po_number'),
@@ -40,7 +42,7 @@ class InvoiceTransformer extends BaseTransformer
                     [
                         'product_key' => $this->getString($data, 'item_product'),
                         'notes' => $this->getString($data, 'item_notes') ?: $this->getProduct($data, 'item_product', 'notes', ''),
-                        'cost' => $this->getFloat($data, 'item_notes') ?: $this->getProduct($data, 'item_product', 'cost', 0),
+                        'cost' => $this->getFloat($data, 'item_cost') ?: $this->getProduct($data, 'item_product', 'cost', 0),
                         'qty' => $this->getFloat($data, 'item_quantity') ?: 1,
                         'tax_name1' => $this->getTaxName($this->getString($data, 'item_tax1')) ?: $this->getProduct($data, 'item_product', 'tax_name1', ''),
                         'tax_rate1' => $this->getTaxRate($this->getString($data, 'item_tax1')) ?: $this->getProduct($data, 'item_product', 'tax_rate1', 0),

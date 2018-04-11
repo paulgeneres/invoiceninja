@@ -2,6 +2,7 @@
 
 namespace App\Ninja\Repositories;
 
+use App\Jobs\PurgeClientData;
 use App\Events\ClientWasCreated;
 use App\Events\ClientWasUpdated;
 use App\Models\Client;
@@ -38,9 +39,10 @@ class ClientRepository extends BaseRepository
                     ->select(
                         DB::raw('COALESCE(clients.currency_id, accounts.currency_id) currency_id'),
                         DB::raw('COALESCE(clients.country_id, accounts.country_id) country_id'),
-                        DB::raw("CONCAT(contacts.first_name, ' ', contacts.last_name) contact"),
+                        DB::raw("CONCAT(COALESCE(contacts.first_name, ''), ' ', COALESCE(contacts.last_name, '')) contact"),
                         'clients.public_id',
                         'clients.name',
+                        'clients.private_notes',
                         'contacts.first_name',
                         'contacts.last_name',
                         'clients.balance',
@@ -72,6 +74,11 @@ class ClientRepository extends BaseRepository
         }
 
         return $query;
+    }
+
+    public function purge($client)
+    {
+        dispatch(new PurgeClientData($client));
     }
 
     public function save($data, $client = null)

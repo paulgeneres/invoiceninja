@@ -32,6 +32,10 @@ class AccountRepository
     public function create($firstName = '', $lastName = '', $email = '', $password = '', $company = false)
     {
         if (! $company) {
+            if (Utils::isNinja()) {
+                $this->checkForSpammer();
+            }
+
             $company = new Company();
             $company->utm_source = Input::get('utm_source');
             $company->utm_medium = Input::get('utm_medium');
@@ -48,6 +52,9 @@ class AccountRepository
                 if (env('PARTNER_CAMPAIGN') && hash_equals(Input::get('utm_campaign'), env('PARTNER_CAMPAIGN'))) {
                     $company->applyFreeYear();
                 }
+            } else {
+                //$company->applyDiscount(.5);
+                //session()->flash('warning', $company->present()->promoMessage());
             }
 
             $company->save();
@@ -57,12 +64,39 @@ class AccountRepository
         $account->ip = Request::getClientIp();
         $account->account_key = strtolower(str_random(RANDOM_KEY_LENGTH));
         $account->company_id = $company->id;
+        $account->currency_id = DEFAULT_CURRENCY;
 
-        if ($locale = Session::get(SESSION_LOCALE)) {
-            if ($language = Language::whereLocale($locale)->first()) {
-                $account->language_id = $language->id;
+        // Set default language/currency based on IP
+        // TODO Disabled until GDPR implications are understood
+        /*
+        if (\Cache::get('currencies')) {
+            if ($data = unserialize(@file_get_contents('http://www.geoplugin.net/php.gp?ip=' . $account->ip))) {
+                $currencyCode = strtolower($data['geoplugin_currencyCode']);
+                $countryCode = strtolower($data['geoplugin_countryCode']);
+
+                $currency = \Cache::get('currencies')->filter(function ($item) use ($currencyCode) {
+                    return strtolower($item->code) == $currencyCode;
+                })->first();
+                if ($currency) {
+                    $account->currency_id = $currency->id;
+                }
+
+                $country = \Cache::get('countries')->filter(function ($item) use ($countryCode) {
+                    return strtolower($item->iso_3166_2) == $countryCode || strtolower($item->iso_3166_3) == $countryCode;
+                })->first();
+                if ($country) {
+                    $account->country_id = $country->id;
+                }
+
+                $language = \Cache::get('languages')->filter(function ($item) use ($countryCode) {
+                    return strtolower($item->locale) == $countryCode;
+                })->first();
+                if ($language) {
+                    $account->language_id = $language->id;
+                }
             }
         }
+        */
 
         $account->save();
 
@@ -95,6 +129,25 @@ class AccountRepository
         return $account;
     }
 
+    private function checkForSpammer()
+    {
+        $ip = Request::getClientIp();
+        $count = Account::whereIp($ip)->whereHas('users', function ($query) {
+            $query->whereRegistered(true);
+        })->count();
+
+        if ($count > 10 && $errorEmail = env('ERROR_EMAIL')) {
+            \Mail::raw($ip, function ($message) use ($ip, $errorEmail) {
+                $message->to($errorEmail)
+                        ->from(CONTACT_EMAIL)
+                        ->subject('Duplicate company for IP: ' . $ip);
+            });
+            if ($count >= 15) {
+                abort();
+            }
+        }
+    }
+
     public function getSearchData($user)
     {
         $data = $this->getAccountSearchData($user);
@@ -117,42 +170,47 @@ class AccountRepository
 
         // include custom client fields in search
         if ($account->custom_client_label1) {
-            $data[$account->custom_client_label1] = [];
+            $data[$account->present()->customClientLabel1] = [];
         }
         if ($account->custom_client_label2) {
-            $data[$account->custom_client_label2] = [];
+            $data[$account->present()->customClientLabel2] = [];
         }
 
         if ($user->hasPermission('view_all')) {
             $clients = Client::scope()
                         ->with('contacts', 'invoices')
-                        ->get();
+                        ->withTrashed()
+                        ->with(['contacts', 'invoices' => function ($query) use ($user) {
+                            $query->withTrashed();
+                        }])->get();
         } else {
             $clients = Client::scope()
                         ->where('user_id', '=', $user->id)
+                        ->withTrashed()
                         ->with(['contacts', 'invoices' => function ($query) use ($user) {
-                            $query->where('user_id', '=', $user->id);
+                            $query->withTrashed()
+                                  ->where('user_id', '=', $user->id);
                         }])->get();
         }
 
         foreach ($clients as $client) {
             if ($client->name) {
                 $data['clients'][] = [
-                    'value' => ($account->clientNumbersEnabled() && $client->id_number ? $client->id_number . ': ' : '') . $client->name,
+                    'value' => ($client->id_number ? $client->id_number . ': ' : '') . $client->name,
                     'tokens' => implode(',', [$client->name, $client->id_number, $client->vat_number, $client->work_phone]),
                     'url' => $client->present()->url,
                 ];
             }
 
             if ($client->custom_value1) {
-                $data[$account->custom_client_label1][] = [
+                $data[$account->present()->customClientLabel1][] = [
                     'value' => "{$client->custom_value1}: " . $client->getDisplayName(),
                     'tokens' => $client->custom_value1,
                     'url' => $client->present()->url,
                 ];
             }
             if ($client->custom_value2) {
-                $data[$account->custom_client_label2][] = [
+                $data[$account->present()->customClientLabel2][] = [
                     'value' => "{$client->custom_value2}: " . $client->getDisplayName(),
                     'tokens' => $client->custom_value2,
                     'url' => $client->present()->url,
@@ -161,7 +219,7 @@ class AccountRepository
 
             foreach ($client->contacts as $contact) {
                 $data['contacts'][] = [
-                    'value' => $contact->getDisplayName(),
+                    'value' => $contact->getSearchName(),
                     'tokens' => implode(',', [$contact->first_name, $contact->last_name, $contact->email, $contact->phone]),
                     'url' => $client->present()->url,
                 ];
@@ -194,6 +252,7 @@ class AccountRepository
             ENTITY_PAYMENT,
             ENTITY_CREDIT,
             ENTITY_PROJECT,
+            ENTITY_PROPOSAL,
         ];
 
         foreach ($entityTypes as $entityType) {
@@ -210,6 +269,8 @@ class AccountRepository
         $features = array_merge($features, [
             ['dashboard', '/dashboard'],
             ['reports', '/reports'],
+            ['calendar', '/calendar'],
+            ['kanban', '/tasks/kanban'],
             ['customize_design', '/settings/customize_design'],
             ['new_tax_rate', '/tax_rates/create'],
             ['new_product', '/products/create'],
@@ -478,7 +539,7 @@ class AccountRepository
 
     public function registerNinjaUser($user)
     {
-        if ($user->email == TEST_USERNAME) {
+        if (! $user || $user->email == TEST_USERNAME) {
             return false;
         }
 
@@ -664,7 +725,7 @@ class AccountRepository
 
     public function findWithReminders()
     {
-        return Account::whereRaw('enable_reminder1 = 1 OR enable_reminder2 = 1 OR enable_reminder3 = 1')->get();
+        return Account::whereRaw('enable_reminder1 = 1 OR enable_reminder2 = 1 OR enable_reminder3 = 1 OR enable_reminder4 = 1')->get();
     }
 
     public function findWithFees()

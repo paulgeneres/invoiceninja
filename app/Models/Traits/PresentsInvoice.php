@@ -2,6 +2,8 @@
 
 namespace App\Models\Traits;
 
+use Utils;
+
 /**
  * Class PresentsInvoice.
  */
@@ -11,6 +13,29 @@ trait PresentsInvoice
     {
         if ($this->invoice_fields) {
             $fields = json_decode($this->invoice_fields, true);
+
+            if (! isset($fields['product_fields'])) {
+                $fields['product_fields'] = [
+                    'product.item',
+                    'product.description',
+                    'product.custom_value1',
+                    'product.custom_value2',
+                    'product.unit_cost',
+                    'product.quantity',
+                    'product.tax',
+                    'product.line_total',
+                ];
+                $fields['task_fields'] = [
+                    'product.service',
+                    'product.description',
+                    'product.custom_value1',
+                    'product.custom_value2',
+                    'product.rate',
+                    'product.hours',
+                    'product.tax',
+                    'product.line_total',
+                ];
+            }
 
             return $this->applyLabels($fields);
         } else {
@@ -54,6 +79,26 @@ trait PresentsInvoice
                 'account.city_state_postal',
                 'account.country',
             ],
+            'product_fields' => [
+                'product.item',
+                'product.description',
+                'product.custom_value1',
+                'product.custom_value2',
+                'product.unit_cost',
+                'product.quantity',
+                'product.tax',
+                'product.line_total',
+            ],
+            'task_fields' => [
+                'product.service',
+                'product.description',
+                'product.custom_value1',
+                'product.custom_value2',
+                'product.rate',
+                'product.hours',
+                'product.tax',
+                'product.line_total',
+            ]
         ];
 
         if ($this->custom_invoice_text_label1) {
@@ -135,6 +180,28 @@ trait PresentsInvoice
                 'account.custom_value1',
                 'account.custom_value2',
                 '.blank',
+            ],
+            INVOICE_FIELDS_PRODUCT => [
+                'product.item',
+                'product.description',
+                'product.custom_value1',
+                'product.custom_value2',
+                'product.unit_cost',
+                'product.quantity',
+                'product.discount',
+                'product.tax',
+                'product.line_total',
+            ],
+            INVOICE_FIELDS_TASK => [
+                'product.service',
+                'product.description',
+                'product.custom_value1',
+                'product.custom_value2',
+                'product.rate',
+                'product.hours',
+                'product.discount',
+                'product.tax',
+                'product.line_total',
             ],
         ];
 
@@ -264,6 +331,12 @@ trait PresentsInvoice
             'invoice_due_date',
             'quote_due_date',
             'service',
+            'product_key',
+            'unit_cost',
+            'custom_value1',
+            'custom_value2',
+            'delivery_note',
+            'date',
         ];
 
         foreach ($fields as $field) {
@@ -289,8 +362,10 @@ trait PresentsInvoice
             'client.custom_value2' => 'custom_client_label2',
             'contact.custom_value1' => 'custom_contact_label1',
             'contact.custom_value2' => 'custom_contact_label2',
+            'product.custom_value1' => 'custom_invoice_item_label1',
+            'product.custom_value2' => 'custom_invoice_item_label2',
         ] as $field => $property) {
-            $data[$field] = e($this->$property) ?: trans('texts.custom_field');
+            $data[$field] = e(Utils::getCustomLabel($this->$property)) ?: trans('texts.custom_field');
         }
 
         return $data;
@@ -306,5 +381,11 @@ trait PresentsInvoice
         }
 
         return null;
+    }
+
+    public function hasInvoiceField($type, $field) {
+        $fields = $this->getInvoiceFields();
+
+        return isset($fields[$type . '_fields'][$field]);
     }
 }

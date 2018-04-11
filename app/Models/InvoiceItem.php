@@ -40,6 +40,7 @@ class InvoiceItem extends EntityModel
         'tax_name2',
         'tax_rate2',
         'invoice_item_type_id',
+        'discount',
     ];
 
     /**
@@ -77,6 +78,15 @@ class InvoiceItem extends EntityModel
     public function amount()
     {
         $amount = $this->cost * $this->qty;
+
+        if ($this->discount != 0) {
+            if ($this->invoice->is_amount_discount) {
+                $amount -= $this->discount;
+            } else {
+                $amount -= $amount * $this->discount / 100;
+            }
+        }
+
         $preTaxAmount = $amount;
 
         if ($this->tax_rate1) {
@@ -97,4 +107,33 @@ class InvoiceItem extends EntityModel
             $this->save();
         }
     }
+
+    public function hasTaxes()
+    {
+        if ($this->tax_name1 || $this->tax_rate1) {
+            return true;
+        }
+
+        if ($this->tax_name2 || $this->tax_rate2) {
+            return false;
+        }
+
+        return false;
+    }
+
+    public function costWithDiscount()
+    {
+        $cost = $this->cost;
+
+        if ($this->discount != 0) {
+            if ($this->invoice->is_amount_discount) {
+                $cost -= $discount / $this->qty;
+            } else {
+                $cost -= $cost * $discount / 100;
+            }
+        }
+
+        return $cost;
+    }
+
 }

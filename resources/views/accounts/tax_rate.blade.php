@@ -28,21 +28,22 @@
   {!! Former::text('name')->label('texts.name') !!}
   {!! Former::text('rate')->label('texts.rate')->append('%') !!}
 
-  {!! Former::radios('is_inclusive')->radios([
-          trans('texts.exclusive') . ': 100 + 10% = 100 + 10' => array('name' => 'is_inclusive', 'value' => 0),
-          trans('texts.inclusive') . ':&nbsp; 100 + 10% = 90.91 + 9.09' => array('name' => 'is_inclusive', 'value' => 1),
-      ])->check(0)
-        ->label('type')
-        ->help('tax_rate_type_help') !!}
-
+  @if (! $taxRate && ! auth()->user()->account->inclusive_taxes)
+      {!! Former::radios('is_inclusive')->radios([
+              trans('texts.exclusive') . ': 100 + 10% = 100 + 10' => array('name' => 'is_inclusive', 'value' => 0),
+              trans('texts.inclusive') . ':&nbsp; 100 + 10% = 90.91 + 9.09' => array('name' => 'is_inclusive', 'value' => 1),
+          ])->check(0)
+            ->label('type')
+            ->help('tax_rate_type_help') !!}
+  @endif
 
   </div>
   </div>
 
-  {!! Former::actions(
-      Button::normal(trans('texts.cancel'))->large()->asLinkTo(URL::to('/settings/tax_rates'))->appendIcon(Icon::create('remove-circle')),
-      Button::success(trans('texts.save'))->submit()->large()->appendIcon(Icon::create('floppy-disk'))
-  ) !!}
+  <center class="buttons">
+      {!! Button::normal(trans('texts.cancel'))->large()->asLinkTo(URL::to('/settings/tax_rates'))->appendIcon(Icon::create('remove-circle')) !!}
+      {!! Button::success(trans('texts.save'))->submit()->large()->appendIcon(Icon::create('floppy-disk')) !!}
+  </center>
 
   {!! Former::close() !!}
 

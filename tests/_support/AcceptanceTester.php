@@ -26,15 +26,11 @@ class AcceptanceTester extends \Codeception\Actor
     */
     function checkIfLogin(\AcceptanceTester $I)
     {
-        //if ($I->loadSessionSnapshot('login')) return;
-
         $I->amOnPage('/login?lang=en');
         $I->see('Login');
         $I->fillField(['name' => 'email'], Fixtures::get('username'));
         $I->fillField(['name' => 'password'], Fixtures::get('password'));
         $I->click('Login');
-
-        //$I->saveSessionSnapshot('login');
     }
 
     function selectDataPicker(\AcceptanceTester $I, $element, $date = 'now')
@@ -66,7 +62,7 @@ class AcceptanceTester extends \Codeception\Actor
     {
         if ( ! $I->grabFromDatabase('account_gateways', 'id', ['id' => 1])) {
             $I->wantTo('create a gateway');
-            $I->amOnPage('/gateways/create?other_providers=true');
+            $I->amOnPage('/gateways/create');
             $I->fillField(['name' =>'23_apiKey'], env('stripe_secret_key') ?: Fixtures::get('stripe_secret_key'));
             $I->fillField(['name' =>'publishable_key'], '');
             $I->click('Save');
@@ -114,7 +110,7 @@ class AcceptanceTester extends \Codeception\Actor
         $invoiceNumber = $I->grabValueFrom('#invoice_number');
 
         $I->selectDropdown($I, $clientEmail, '.client_select .dropdown-toggle');
-        $I->fillField('table.invoice-table tbody tr:nth-child(1) #product_key', $productKey);
+        $I->fillField('table.invoice-table tbody tr:nth-child(1) td:nth-child(2) input.tt-input', $productKey);
         $I->click('table.invoice-table tbody tr:nth-child(1) .tt-selectable');
 
         return $invoiceNumber;
@@ -132,7 +128,7 @@ class AcceptanceTester extends \Codeception\Actor
             $I->selectOption('#expiration_month', 12);
             $I->selectOption('#expiration_year', date('Y'));
             $I->click('.btn-success');
-            $I->wait(3);
+            $I->wait(5);
             $I->see('Successfully applied payment');
         });
     }

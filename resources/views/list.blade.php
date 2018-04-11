@@ -1,4 +1,4 @@
-{!! Former::open(Utils::pluralizeEntityType($entityType) . '/bulk')
+{!! Former::open(\App\Models\EntityModel::getFormUrl($entityType) . '/bulk')
 		->addClass('listForm_' . $entityType) !!}
 
 <div style="display:none">
@@ -8,14 +8,11 @@
 </div>
 
 <div class="pull-left">
-	@can('create', 'invoice')
-		@if ($entityType == ENTITY_TASK)
+	@if (in_array($entityType, [ENTITY_TASK, ENTITY_EXPENSE, ENTITY_PRODUCT, ENTITY_PROJECT]))
+		@can('create', 'invoice')
 			{!! Button::primary(trans('texts.invoice'))->withAttributes(['class'=>'invoice', 'onclick' =>'submitForm_'.$entityType.'("invoice")'])->appendIcon(Icon::create('check')) !!}
-		@endif
-		@if ($entityType == ENTITY_EXPENSE)
-			{!! Button::primary(trans('texts.invoice'))->withAttributes(['class'=>'invoice', 'onclick' =>'submitForm_'.$entityType.'("invoice")'])->appendIcon(Icon::create('check')) !!}
-		@endif
-	@endcan
+		@endcan
+	@endif
 
 	{!! DropdownButton::normal(trans('texts.archive'))
 			->withContents($datatable->bulkActions())
@@ -49,17 +46,40 @@
 	<input id="tableFilter_{{ $entityType }}" type="text" style="width:180px;margin-right:17px;background-color: white !important"
         class="form-control pull-left" placeholder="{{ trans('texts.filter') }}" value="{{ Input::get('filter') }}"/>
 
-	@if ($entityType == ENTITY_INVOICE && auth()->user()->account->isModuleEnabled(ENTITY_RECURRING_INVOICE))
-		{!! DropdownButton::normal(trans('texts.recurring'))
-			->withAttributes(['class'=>'recurringDropdown'])
+	@if ($entityType == ENTITY_PROPOSAL)
+		{!! DropdownButton::normal(trans('texts.proposal_templates'))
+			->withAttributes(['class'=>'templatesDropdown'])
 			->withContents([
-			  ['label' => trans('texts.new_recurring_invoice'), 'url' => url('/recurring_invoices/create')],
+			  ['label' => trans('texts.new_proposal_template'), 'url' => url('/proposals/templates/create')],
+			]
+		  )->split() !!}
+		  {!! DropdownButton::normal(trans('texts.proposal_snippets'))
+  			->withAttributes(['class'=>'snippetsDropdown'])
+  			->withContents([
+  			  ['label' => trans('texts.new_proposal_snippet'), 'url' => url('/proposals/snippets/create')],
+  			]
+  		  )->split() !!}
+		<script type="text/javascript">
+			$(function() {
+				$('.templatesDropdown:not(.dropdown-toggle)').click(function(event) {
+					openUrlOnClick('{{ url('/proposals/templates') }}', event);
+				});
+				$('.snippetsDropdown:not(.dropdown-toggle)').click(function(event) {
+					openUrlOnClick('{{ url('/proposals/snippets') }}', event);
+				});
+			});
+		</script>
+	@elseif ($entityType == ENTITY_PROPOSAL_SNIPPET)
+		{!! DropdownButton::normal(trans('texts.proposal_categories'))
+			->withAttributes(['class'=>'categoriesDropdown'])
+			->withContents([
+			  ['label' => trans('texts.new_proposal_category'), 'url' => url('/proposals/categories/create')],
 			]
 		  )->split() !!}
 		<script type="text/javascript">
 			$(function() {
-				$('.recurringDropdown:not(.dropdown-toggle)').click(function() {
-					window.location = '{{ url('/recurring_invoices') }}';
+				$('.categoriesDropdown:not(.dropdown-toggle)').click(function(event) {
+					openUrlOnClick('{{ url('/proposals/categories') }}', event);
 				});
 			});
 		</script>
@@ -70,40 +90,40 @@
 			  ['label' => trans('texts.new_recurring_expense'), 'url' => url('/recurring_expenses/create')],
 			]
 		  )->split() !!}
-	    {!! DropdownButton::normal(trans('texts.categories'))
-			->withAttributes(['class'=>'categoriesDropdown'])
-			->withContents([
-			  ['label' => trans('texts.new_expense_category'), 'url' => url('/expense_categories/create')],
-			]
-		  )->split() !!}
+		@if (Auth::user()->can('create', ENTITY_EXPENSE_CATEGORY))
+			{!! DropdownButton::normal(trans('texts.categories'))
+                ->withAttributes(['class'=>'categoriesDropdown'])
+                ->withContents([
+                  ['label' => trans('texts.new_expense_category'), 'url' => url('/expense_categories/create')],
+                ]
+              )->split() !!}
+		@else
+			{!! DropdownButton::normal(trans('texts.categories'))
+                ->withAttributes(['class'=>'categoriesDropdown'])
+                ->split() !!}
+		@endif
 	  	<script type="text/javascript">
 		  	$(function() {
-				$('.recurringDropdown:not(.dropdown-toggle)').click(function() {
-		  			window.location = '{{ url('/recurring_expenses') }}';
+				$('.recurringDropdown:not(.dropdown-toggle)').click(function(event) {
+					openUrlOnClick('{{ url('/recurring_expenses') }}', event)
 		  		});
-				$('.categoriesDropdown:not(.dropdown-toggle)').click(function() {
-		  			window.location = '{{ url('/expense_categories') }}';
+				$('.categoriesDropdown:not(.dropdown-toggle)').click(function(event) {
+					openUrlOnClick('{{ url('/expense_categories') }}', event);
 		  		});
 			});
 		</script>
 	@elseif ($entityType == ENTITY_TASK)
-		{!! DropdownButton::normal(trans('texts.projects'))
-			->withAttributes(['class'=>'projectsDropdown'])
-			->withContents([
-			  ['label' => trans('texts.new_project'), 'url' => url('/projects/create')],
-			]
-		  )->split() !!}
-	  	<script type="text/javascript">
-		  	$(function() {
-		  		$('.projectsDropdown:not(.dropdown-toggle)').click(function() {
-		  			window.location = '{{ url('projects') }}';
-		  		});
-			});
-		</script>
+		{!! Button::normal(trans('texts.kanban'))->asLinkTo(url('/tasks/kanban' . (! empty($clientId) ? ('/' . $clientId . (! empty($projectId) ? '/' . $projectId : '')) : '')))->appendIcon(Icon::create('th')) !!}
+		{!! Button::normal(trans('texts.time_tracker'))->asLinkTo('javascript:openTimeTracker()')->appendIcon(Icon::create('time')) !!}
     @endif
 
 	@if (Auth::user()->can('create', $entityType) && empty($vendorId))
-    	{!! Button::primary(mtrans($entityType, "new_{$entityType}"))->asLinkTo(url(Utils::pluralizeEntityType($entityType) . '/create/' . (isset($clientId) ? $clientId : '')))->appendIcon(Icon::create('plus-sign')) !!}
+    	{!! Button::primary(mtrans($entityType, "new_{$entityType}"))
+			->asLinkTo(url(
+				(in_array($entityType, [ENTITY_PROPOSAL_SNIPPET, ENTITY_PROPOSAL_CATEGORY, ENTITY_PROPOSAL_TEMPLATE]) ? str_replace('_', 's/', Utils::pluralizeEntityType($entityType)) : Utils::pluralizeEntityType($entityType)) .
+				'/create/' . (isset($clientId) ? ($clientId . (isset($projectId) ? '/' . $projectId : '')) : '')
+			))
+			->appendIcon(Icon::create('plus-sign')) !!}
 	@endif
 
 </div>
@@ -111,9 +131,9 @@
 
 {!! Datatable::table()
 	->addColumn(Utils::trans($datatable->columnFields(), $datatable->entityType))
-	->setUrl(url('api/' . Utils::pluralizeEntityType($entityType) . '/' . (isset($clientId) ? $clientId : (isset($vendorId) ? $vendorId : ''))))
+	->setUrl(url('api/' . Utils::pluralizeEntityType($entityType) . '/' . (isset($clientId) ? (isset($projectId) ? ($clientId . '/' . $projectId) : $clientId) : (isset($vendorId) ? $vendorId : ''))))
 	->setCustomValues('entityType', Utils::pluralizeEntityType($entityType))
-	->setCustomValues('clientId', isset($clientId) && $clientId)
+	->setCustomValues('clientId', isset($clientId) && $clientId && empty($projectId))
 	->setOptions('sPaginationType', 'bootstrap')
     ->setOptions('aaSorting', [[isset($clientId) ? ($datatable->sortCol-1) : $datatable->sortCol, 'desc']])
 	->render('datatable') !!}
@@ -143,7 +163,15 @@
 
 <script type="text/javascript">
 
+	var submittedForm;
 	function submitForm_{{ $entityType }}(action, id) {
+		// prevent duplicate form submissions
+		if (submittedForm) {
+			swal("{{ trans('texts.processing_request') }}")
+			return;
+		}
+		submittedForm = true;
+
 		if (id) {
 			$('#public_id_{{ $entityType }}').val(id);
 		}
@@ -209,6 +237,7 @@
 	        });
 
 	        actionListHandler();
+			$('[data-toggle="tooltip"]').tooltip();
 	    }
 
 	    $('.listForm_{{ $entityType }} .archive, .invoice').prop('disabled', true);

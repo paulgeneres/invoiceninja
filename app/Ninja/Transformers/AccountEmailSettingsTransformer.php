@@ -40,9 +40,17 @@ class AccountEmailSettingsTransformer extends EntityTransformer
             'email_subject_reminder1' => $settings->email_subject_reminder1,
             'email_subject_reminder2' => $settings->email_subject_reminder2,
             'email_subject_reminder3' => $settings->email_subject_reminder3,
+            'email_subject_reminder4' => $settings->email_subject_reminder4,
             'email_template_reminder1' => $settings->email_template_reminder1,
             'email_template_reminder2' => $settings->email_template_reminder2,
             'email_template_reminder3' => $settings->email_template_reminder3,
+            'email_template_reminder4' => $settings->email_template_reminder4,
+            'late_fee1_amount' => $settings->late_fee1_amount,
+            'late_fee1_percent' => $settings->late_fee1_percent,
+            'late_fee2_amount' => $settings->late_fee2_amount,
+            'late_fee2_percent' => $settings->late_fee2_percent,
+            'late_fee3_amount' => $settings->late_fee3_amount,
+            'late_fee3_percent' => $settings->late_fee3_percent,
         ];
     }
 }

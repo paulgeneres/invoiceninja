@@ -18,7 +18,7 @@ use Utils;
 /**
  * @SWG\Swagger(
  *     schemes={"http","https"},
- *     host="ninja.dev",
+ *     host="ninja.test",
  *     basePath="/api/v1",
  *     produces={"application/json"},
  *     @SWG\Info(
@@ -74,8 +74,12 @@ class BaseAPIController extends Controller
         $entity = $request->entity();
         $action = $request->action;
 
-        if (! in_array($action, ['archive', 'delete', 'restore'])) {
+        if (! in_array($action, ['archive', 'delete', 'restore', 'mark_sent'])) {
             return $this->errorResponse("Action [$action] is not supported");
+        }
+
+        if ($action == 'mark_sent') {
+            $action = 'markSent';
         }
 
         $repo = Utils::toCamelCase($this->entityType) . 'Repo';
@@ -95,15 +99,17 @@ class BaseAPIController extends Controller
 
         $query->with($includes);
 
-        if ($updatedAt = intval(Input::get('updated_at'))) {
-            $query->where('updated_at', '>=', date('Y-m-d H:i:s', $updatedAt));
+        if (Input::get('updated_at') > 0) {
+                $updatedAt = intval(Input::get('updated_at'));
+                $query->where('updated_at', '>=', date('Y-m-d H:i:s', $updatedAt));
         }
 
-        if ($clientPublicId = Input::get('client_id')) {
-            $filter = function ($query) use ($clientPublicId) {
+        if (Input::get('client_id') > 0) {
+                $clientPublicId = Input::get('client_id');
+                $filter = function ($query) use ($clientPublicId) {
                 $query->where('public_id', '=', $clientPublicId);
-            };
-            $query->whereHas('client', $filter);
+             };
+             $query->whereHas('client', $filter);
         }
 
         if (! Utils::hasPermission('view_all')) {
@@ -151,7 +157,10 @@ class BaseAPIController extends Controller
         }
 
         if (is_a($query, "Illuminate\Database\Eloquent\Builder")) {
-            $limit = min(MAX_API_PAGE_SIZE, Input::get('per_page', DEFAULT_API_PAGE_SIZE));
+            $limit = Input::get('per_page', DEFAULT_API_PAGE_SIZE);
+            if (Utils::isNinja()) {
+                $limit = min(MAX_API_PAGE_SIZE, $limit);
+            }
             $paginator = $query->paginate($limit);
             $query = $paginator->getCollection();
             $resource = new Collection($query, $transformer, $entityType);
@@ -204,6 +213,10 @@ class BaseAPIController extends Controller
         foreach ($included as $include) {
             if ($include == 'invoices') {
                 $data[] = 'invoices.invoice_items';
+                $data[] = 'invoices.client.contacts';
+            } elseif ($include == 'invoice') {
+                $data[] = 'invoice.invoice_items';
+                $data[] = 'invoice.client.contacts';
             } elseif ($include == 'client') {
                 $data[] = 'client.contacts';
             } elseif ($include == 'clients') {

@@ -19,7 +19,7 @@ class PaymentPresenter extends EntityPresenter
 
     public function currencySymbol()
     {
-        return Utils::getFromCache($this->entity->currency_id ? $this->entity->currency_id : DEFAULT_CURRENCY, 'currencies')->symbol;
+        return Utils::getFromCache($this->entity->client->currency_id ? $this->entity->client->currency_id : DEFAULT_CURRENCY, 'currencies')->symbol;
     }
 
     public function client()
@@ -44,5 +44,23 @@ class PaymentPresenter extends EntityPresenter
         } elseif ($this->entity->payment_type) {
             return trans('texts.payment_type_' . $this->entity->payment_type->name);
         }
+    }
+
+    public function calendarEvent($subColors = false)
+    {
+        $data = parent::calendarEvent();
+        $payment = $this->entity;
+        $invoice = $payment->invoice;
+
+        $data->title = trans('texts.payment') . ' ' . $invoice->invoice_number . ' | ' . $this->completedAmount() . ' | ' . $this->client();
+        $data->start = $payment->payment_date;
+
+        if ($subColors) {
+            $data->borderColor = $data->backgroundColor = Utils::brewerColor($payment->payment_status_id);
+        } else {
+            $data->borderColor = $data->backgroundColor = '#5fa213';
+        }
+
+        return $data;
     }
 }

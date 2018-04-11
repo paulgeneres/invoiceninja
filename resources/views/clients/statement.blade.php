@@ -75,8 +75,10 @@
 
             $('#reportrange').daterangepicker({
                 locale: {
-					format: "{{ $account->getMomentDateFormat() }}",
-					customRangeLabel: "{{ trans('texts.custom_range') }}",
+                    format: "{{ $account->getMomentDateFormat() }}",
+                    customRangeLabel: "{{ trans('texts.custom_range') }}",
+                    applyLabel: "{{ trans('texts.apply') }}",
+                    cancelLabel: "{{ trans('texts.cancel') }}",
                 },
                 startDate: statementStartDate,
                 endDate: statementEndDate,
@@ -96,7 +98,7 @@
                 $('#reportrange').css('color', '#000');
                 $('#reportrange').css('pointer-events', 'auto');
             }
-            var url = "{!! url('/clients/statement/' . $client->public_id) !!}/" + statusId + '/' +
+            var url = '{{ url('/clients/statement/' . $client->public_id) }}' + '/' + statusId + '/' +
                 statementStartDate.format('YYYY-MM-DD') + '/' + statementEndDate.format('YYYY-MM-DD') + '?json=true';
             $.get(url, function(response) {
                 invoice = currentInvoice = JSON.parse(response);
@@ -124,7 +126,7 @@
 @section('content')
 
     <div class="pull-right">
-        {!! Button::normal(trans('texts.download_pdf'))
+        {!! Button::normal(trans('texts.download'))
                 ->withAttributes(['onclick' => 'onDownloadClick()'])
                 ->appendIcon(Icon::create('download-alt')) !!}
         {!! Button::primary(trans('texts.view_client'))

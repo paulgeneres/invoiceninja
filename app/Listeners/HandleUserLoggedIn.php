@@ -41,7 +41,8 @@ class HandleUserLoggedIn
      */
     public function handle(UserLoggedIn $event)
     {
-        $account = Auth::user()->account;
+        $user = auth()->user();
+        $account = $user->account;
 
         if (! Utils::isNinja() && empty($account->last_login)) {
             event(new UserSignedUp());
@@ -49,6 +50,11 @@ class HandleUserLoggedIn
 
         $account->last_login = Carbon::now()->toDateTimeString();
         $account->save();
+
+        if ($user->failed_logins > 0) {
+            $user->failed_logins = 0;
+            $user->save();
+        }
 
         $users = $this->accountRepo->loadAccounts(Auth::user()->id);
         Session::put(SESSION_USER_ACCOUNTS, $users);
@@ -65,7 +71,7 @@ class HandleUserLoggedIn
 
         // if they're using Stripe make sure they're using Stripe.js
         $accountGateway = $account->getGatewayConfig(GATEWAY_STRIPE);
-        if ($accountGateway && ! $accountGateway->getPublishableStripeKey()) {
+        if ($accountGateway && ! $accountGateway->getPublishableKey()) {
             Session::flash('warning', trans('texts.missing_publishable_key'));
         } elseif ($account->isLogoTooLarge()) {
             Session::flash('warning', trans('texts.logo_too_large', ['size' => $account->getLogoSize() . 'KB']));
@@ -95,6 +101,8 @@ class HandleUserLoggedIn
             // warn if using the default app key
             if (in_array(config('app.key'), ['SomeRandomString', 'SomeRandomStringSomeRandomString', 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'])) {
                 Session::flash('error', trans('texts.error_app_key_set_to_default'));
+            } elseif (in_array($appCipher, ['MCRYPT_RIJNDAEL_256', 'MCRYPT_RIJNDAEL_128'])) {
+                Session::flash('error', trans('texts.mcrypt_warning', ['command' => '<code>php artisan ninja:update-key --legacy=true</code>']));
             }
         }
     }

@@ -9,9 +9,9 @@
   {{ Former::populate($account) }}
   {{ Former::populateField('invoice_taxes', intval($account->invoice_taxes)) }}
   {{ Former::populateField('invoice_item_taxes', intval($account->invoice_item_taxes)) }}
-  {{ Former::populateField('show_item_taxes', intval($account->show_item_taxes)) }}
   {{ Former::populateField('enable_second_tax_rate', intval($account->enable_second_tax_rate)) }}
   {{ Former::populateField('include_item_taxes_inline', intval($account->include_item_taxes_inline)) }}
+  {{ Former::populateField('inclusive_taxes', intval($account->inclusive_taxes)) }}
 
 
   <div class="panel panel-default">
@@ -30,8 +30,8 @@
         ->label('&nbsp;')
         ->value(1) !!}
 
-    {!! Former::checkbox('show_item_taxes')
-        ->text(trans('texts.show_line_item_tax'))
+    {!! Former::checkbox('enable_second_tax_rate')
+        ->text(trans('texts.enable_second_tax_rate'))
         ->label('&nbsp;')
         ->value(1) !!}
 
@@ -40,16 +40,26 @@
         ->label('&nbsp;')
         ->value(1) !!}
 
-    {!! Former::checkbox('enable_second_tax_rate')
-        ->text(trans('texts.enable_second_tax_rate'))
-        ->label('&nbsp;')
-        ->value(1) !!}
+    @if (! $hasInclusiveTaxRates && $countInvoices == 0)
+        <br/>
+        {!! Former::checkbox('inclusive_taxes')
+            ->text(trans('texts.inclusive_taxes_help'))
+            ->label('&nbsp;')
+            ->help('inclusive_taxes_notice')
+            ->value(1) !!}
+    @elseif ($countInvoices <= 10)
+        {!! Former::plaintext(' ')->help(
+                trans($account->inclusive_taxes ? 'texts.taxes_are_included_help' : 'texts.taxes_are_not_included_help') . '<br/>' .
+                trans('texts.change_requires_purge', ['link' => link_to(url('/settings/account_management'), trans('texts.purging'))])) !!}
+    @endif
 
       &nbsp;
 
-      @include('partials.tax_rates', ['taxRateLabel' => trans('texts.default_tax_rate_id')])
+      @if ($taxRates->count())
+          @include('partials.tax_rates', ['taxRateLabel' => trans('texts.default_tax_rate_id')])
+          &nbsp;
+      @endif
 
-      &nbsp;
       {!! Former::actions( Button::success(trans('texts.save'))->submit()->appendIcon(Icon::create('floppy-disk')) ) !!}
       {!! Former::close() !!}
   </div>
@@ -80,5 +90,15 @@
     window.onDatatableReady = actionListHandler;
   </script>
 
+
+  <script type="text/javascript">
+    $(function() {
+        @if ($countInvoices > 0)
+            $('#inclusive_taxes').change(function() {
+                swal("{{ trans('texts.inclusive_taxes_warning') }}");
+            })
+        @endif
+    })
+  </script>
 
 @stop

@@ -34,7 +34,7 @@
     <div class="col-md-5">
         <div class="pull-right">
 
-          {!! Former::open('vendors/bulk')->addClass('mainForm') !!}
+          {!! Former::open('vendors/bulk')->autocomplete('off')->addClass('mainForm') !!}
       		<div style="display:none">
       			{!! Former::text('action') !!}
       			{!! Former::text('public_id')->value($vendor->public_id) !!}
@@ -98,7 +98,7 @@
                 {{ $vendor->getCityState() }}<br/>
             @endif
             @if ($vendor->country)
-                {{ $vendor->country->name }}<br/>
+                {{ $vendor->country->getName() }}<br/>
             @endif
 
             @if ($vendor->account->custom_vendor_label1 && $vendor->custom_value1)
@@ -113,7 +113,7 @@
             @endif
 
             @if ($vendor->private_notes)
-                <p><i>{{ $vendor->private_notes }}</i></p>
+                <p><i>{!! nl2br(e($vendor->private_notes)) !!}</i></p>
             @endif
 
   	        @if ($vendor->vendor_industry)
@@ -191,15 +191,14 @@
     var loadedTabs = {};
 
 	$(function() {
-		$('.normalDropDown:not(.dropdown-toggle)').click(function() {
-			window.location = '{{ URL::to('vendors/' . $vendor->public_id . '/edit') }}';
+		$('.normalDropDown:not(.dropdown-toggle)').click(function(event) {
+            openUrlOnClick('{{ URL::to('vendors/' . $vendor->public_id . '/edit') }}', event)
 		});
-		$('.primaryDropDown:not(.dropdown-toggle)').click(function() {
-			window.location = '{{ URL::to('expenses/create/' . $vendor->public_id ) }}';
+		$('.primaryDropDown:not(.dropdown-toggle)').click(function(event) {
+			openUrlOnClick('{{ URL::to('expenses/create/' . $vendor->public_id ) }}', event);
 		});
 
         $('.nav-tabs a[href="#expenses"]').tab('show');
-        //load_expenses();
 	});
 
 	function onArchiveClick() {
@@ -213,7 +212,7 @@
 	}
 
 	function onDeleteClick() {
-		if (confirm("{!! trans('texts.are_you_sure') !!}")) {
+		if (confirm({!! json_encode(trans('texts.are_you_sure')) !!})) {
 			$('#action').val('delete');
 			$('.mainForm').submit();
 		}
@@ -229,7 +228,7 @@
             };
 
             var map = new google.maps.Map(mapCanvas, mapOptions)
-            var address = "{{ "{$vendor->address1} {$vendor->address2} {$vendor->city} {$vendor->state} {$vendor->postal_code} " . ($vendor->country ? $vendor->country->name : '') }}";
+            var address = {!! json_encode(e("{$vendor->address1} {$vendor->address2} {$vendor->city} {$vendor->state} {$vendor->postal_code} " . ($vendor->country ? $vendor->country->getName() : ''))) !!};
 
             geocoder = new google.maps.Geocoder();
             geocoder.geocode( { 'address': address}, function(results, status) {

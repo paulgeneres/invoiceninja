@@ -4,6 +4,8 @@ use App\Libraries\Utils;
 
 return [
 
+    'name' => env('APP_NAME', 'Invoice Ninja'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Debug Mode
@@ -128,7 +130,7 @@ return [
         'Illuminate\Filesystem\FilesystemServiceProvider',
         'Illuminate\Foundation\Providers\FoundationServiceProvider',
         'Illuminate\Hashing\HashServiceProvider',
-        (isset($_ENV['POSTMARK_API_TOKEN']) ? 'Postmark\Adapters\LaravelMailProvider' : 'Illuminate\Mail\MailServiceProvider'),
+        'Illuminate\Mail\MailServiceProvider',
         'Illuminate\Pagination\PaginationServiceProvider',
         'Illuminate\Pipeline\PipelineServiceProvider',
         'Illuminate\Queue\QueueServiceProvider',
@@ -139,6 +141,7 @@ return [
         'Illuminate\Validation\ValidationServiceProvider',
         'Illuminate\View\ViewServiceProvider',
         'Illuminate\Broadcasting\BroadcastServiceProvider',
+        'Illuminate\Notifications\NotificationServiceProvider',
 
         /*
          * Additional Providers
@@ -146,7 +149,6 @@ return [
         'Bootstrapper\BootstrapperL5ServiceProvider',
         'Former\FormerServiceProvider',
         'Barryvdh\Debugbar\ServiceProvider',
-        'Chumper\Datatable\DatatableServiceProvider',
         'Intervention\Image\ImageServiceProvider',
         'Webpatser\Countries\CountriesServiceProvider',
         'Barryvdh\LaravelIdeHelper\IdeHelperServiceProvider',
@@ -158,6 +160,9 @@ return [
         Codedge\Updater\UpdaterServiceProvider::class,
         Nwidart\Modules\LaravelModulesServiceProvider::class,
         Barryvdh\Cors\ServiceProvider::class,
+        PragmaRX\Google2FALaravel\ServiceProvider::class,
+        'Chumper\Datatable\DatatableServiceProvider',
+        Laravel\Tinker\TinkerServiceProvider::class,
 
         /*
          * Application Service Providers...
@@ -171,6 +176,7 @@ return [
 
         'Barryvdh\LaravelIdeHelper\IdeHelperServiceProvider',
         'Davibennun\LaravelPushNotification\LaravelPushNotificationServiceProvider',
+
     ],
 
     /*
@@ -248,7 +254,6 @@ return [
         'Typeahead'       => 'Bootstrapper\Facades\Typeahead',
         'Typography'      => 'Bootstrapper\Facades\Typography',
         'Former'          => 'Former\Facades\Former',
-        'Datatable'       => 'Chumper\Datatable\Facades\DatatableFacade',
         'Omnipay'         => 'Omnipay\Omnipay',
         'CreditCard'      => 'Omnipay\Common\CreditCard',
         'Image'           => 'Intervention\Image\Facades\Image',
@@ -259,6 +264,7 @@ return [
         'Excel'           => 'Maatwebsite\Excel\Facades\Excel',
         'PushNotification' => 'Davibennun\LaravelPushNotification\Facades\PushNotification',
         'Crawler'   => 'Jaybizzle\LaravelCrawlerDetect\Facades\LaravelCrawlerDetect',
+        'Datatable' => 'Chumper\Datatable\Facades\DatatableFacade',
         'Updater' => Codedge\Updater\UpdaterFacade::class,
         'Module' => Nwidart\Modules\Facades\Module::class,
 
@@ -266,6 +272,8 @@ return [
         'DateUtils' => App\Libraries\DateUtils::class,
         'HTMLUtils' => App\Libraries\HTMLUtils::class,
         'Domain' => App\Constants\Domain::class,
+        'Google2FA' => PragmaRX\Google2FALaravel\Facade::class,
+
     ],
 
 ];

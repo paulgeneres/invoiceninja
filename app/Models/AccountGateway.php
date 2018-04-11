@@ -95,7 +95,16 @@ class AccountGateway extends EntityModel
      */
     public function isGateway($gatewayId)
     {
-        return $this->gateway_id == $gatewayId;
+        if (is_array($gatewayId)) {
+            foreach ($gatewayId as $id) {
+                if ($this->gateway_id == $id) {
+                    return true;
+                }
+            }
+            return false;
+        } else {
+            return $this->gateway_id == $gatewayId;
+        }
     }
 
     /**
@@ -127,13 +136,22 @@ class AccountGateway extends EntityModel
     /**
      * @return bool|mixed
      */
-    public function getPublishableStripeKey()
+    public function getPublishableKey()
+    {
+        if (! $this->isGateway([GATEWAY_STRIPE, GATEWAY_PAYMILL])) {
+            return false;
+        }
+
+        return $this->getConfigField('publishableKey');
+    }
+
+    public function getAppleMerchantId()
     {
         if (! $this->isGateway(GATEWAY_STRIPE)) {
             return false;
         }
 
-        return $this->getConfigField('publishableKey');
+        return $this->getConfigField('appleMerchantId');
     }
 
     /**
@@ -142,6 +160,14 @@ class AccountGateway extends EntityModel
     public function getAchEnabled()
     {
         return ! empty($this->getConfigField('enableAch'));
+    }
+
+    /**
+     * @return bool
+     */
+    public function getApplePayEnabled()
+    {
+        return ! empty($this->getConfigField('enableApplePay'));
     }
 
     /**
@@ -158,6 +184,22 @@ class AccountGateway extends EntityModel
     public function getSofortEnabled()
     {
         return ! empty($this->getConfigField('enableSofort'));
+    }
+
+    /**
+     * @return bool
+     */
+    public function getSepaEnabled()
+    {
+        return ! empty($this->getConfigField('enableSepa'));
+    }
+
+    /**
+     * @return bool
+     */
+    public function getBitcoinEnabled()
+    {
+        return ! empty($this->getConfigField('enableBitcoin'));
     }
 
     /**
@@ -221,7 +263,7 @@ class AccountGateway extends EntityModel
             return null;
         }
 
-        $stripe_key = $this->getPublishableStripeKey();
+        $stripe_key = $this->getPublishableKey();
 
         return substr(trim($stripe_key), 0, 8) == 'pk_test_' ? 'tartan' : 'production';
     }
@@ -234,5 +276,14 @@ class AccountGateway extends EntityModel
         $account = $this->account ? $this->account : Account::find($this->account_id);
 
         return \URL::to(env('WEBHOOK_PREFIX', '').'payment_hook/'.$account->account_key.'/'.$this->gateway_id.env('WEBHOOK_SUFFIX', ''));
+    }
+
+    public function isTestMode()
+    {
+        if ($this->isGateway(GATEWAY_STRIPE)) {
+            return strpos($this->getPublishableKey(), 'test') !== false;
+        } else {
+            return $this->getConfigField('testMode');
+        }
     }
 }

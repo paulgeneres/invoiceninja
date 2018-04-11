@@ -39,19 +39,21 @@
                             ->data_bind('combobox: bank_id')
                             ->addOption('', '')
                             ->fromQuery($banks, 'name', 'id')
-                            ->blockHelp(trans('texts.bank_accounts_help', ['link' => OFX_HOME_URL]))  !!}
+                            ->blockHelp(trans('texts.bank_accounts_help', ['link' => link_to(OFX_HOME_URL, trans('texts.us_banks'), ['target' => '_blank'])]))  !!}
                 @endif
 
                 <br/>
 
                 {!! Former::password('bank_username')
                         ->data_bind("value: bank_username, valueUpdate: 'afterkeydown'")
-                        ->label(trans('texts.username')) !!}
+                        ->label(trans('texts.username'))
+                        ->data_lpignore('true') !!}
 
                 {!! Former::password('bank_password')
                         ->label(trans('texts.password'))
                         ->data_bind("value: bank_password, valueUpdate: 'afterkeydown'")
-                        ->blockHelp(trans(Request::secure() ? 'texts.bank_password_help' : 'texts.bank_password_warning')) !!}
+                        ->blockHelp(trans(Request::secure() ? 'texts.bank_password_help' : 'texts.bank_password_warning'))
+                        ->data_lpignore('true') !!}
 
                 <br/>
 
@@ -66,7 +68,9 @@
                         ->addOption('101', 101)
                         ->addOption('102', 102)
                         ->addOption('103', 103)
-                        ->help('ofx_help') !!}
+                        ->help(trans('texts.ofx_help', [
+                            'link' => link_to('http://www.ofxhome.com/index.php/home/directory', trans('texts.adjust_the_settings'), ['target' => '_blank', 'id' => 'ofxLink'])
+                        ])) !!}
 
             </div>
         </div>
@@ -179,41 +183,40 @@
     </div>
     </div>
 
-    <p/>&nbsp;<p/>
-
     @if (Auth::user()->hasFeature(FEATURE_EXPENSES))
-        {!! Former::actions(
-            count(Cache::get('banks')) > 0 ?
+        <center class="buttons">
+            {!! count(Cache::get('banks')) > 0 ?
                 Button::normal(trans('texts.cancel'))
                     ->withAttributes([
                         'data-bind' => 'visible: !importResults()',
                     ])
                     ->large()
                     ->asLinkTo(URL::to('/settings/bank_accounts'))
-                    ->appendIcon(Icon::create('remove-circle')) : false,
-            Button::success(trans('texts.validate'))
+                    ->appendIcon(Icon::create('remove-circle')) : false !!}
+            {!! Button::success(trans('texts.validate'))
                 ->withAttributes([
                     'data-bind' => 'css: {disabled: disableValidate}, visible: page() == "login"',
                     'onclick' => 'validate()'
                 ])
                 ->large()
-                ->appendIcon(Icon::create('lock')),
-            Button::success(trans('texts.save'))
+                ->appendIcon(Icon::create('lock')) !!}
+            {!! Button::success(trans('texts.save'))
                 ->withAttributes([
                     'data-bind' => 'css: {disabled: disableSave}, visible: page() == "setup"',
                     'style' => 'display:none',
                     'onclick' => 'save()'
                 ])
                 ->large()
-                ->appendIcon(Icon::create('floppy-disk'))   ,
-            Button::success(trans('texts.import'))
+                ->appendIcon(Icon::create('floppy-disk')) !!}
+            {!! Button::success(trans('texts.import'))
                 ->withAttributes([
                     'data-bind' => 'css: {disabled: disableSaveExpenses}, visible: page() == "import"',
                     'style' => 'display:none',
                     'onclick' => 'saveExpenses()'
                 ])
                 ->large()
-                ->appendIcon(Icon::create('floppy-disk'))) !!}
+                ->appendIcon(Icon::create('floppy-disk')) !!}
+        </center>
     @endif
 
     {!! Former::close() !!}
@@ -299,7 +302,27 @@
     }
 
     $(function() {
-        $('#bank_id').focus();
+
+        var banks = {!! $banks || '[]' !!};
+        var bankMap = {};
+
+        for (var i=0; i<banks.length; i++) {
+            var bank = banks[i];
+            bankMap[bank.id] = bank;
+        }
+
+        $('#bank_id')
+            .change(function(event) {
+                var bankId = $(event.currentTarget).val();
+                bankId = bankMap[bankId] ? bankMap[bankId].remote_id : false;
+                if (bankId) {
+                    var link = 'http://www.ofxhome.com/index.php/institution/view/' + bankId;
+                } else {
+                    var link = 'http://www.ofxhome.com/index.php/home/directory';
+                }
+                $('#ofxLink').attr('href', link);
+            })
+            .focus();
     });
 
     var TransactionModel = function(data) {

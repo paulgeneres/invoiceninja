@@ -10,7 +10,13 @@
                 ->rules(['email' => 'required|email', 'password' => 'required'])
                 ->addClass('form-signin') !!}
 
-        <h2 class="form-signin-heading">{{ trans('texts.account_login') }}</h2>
+        <h2 class="form-signin-heading">
+            @if (strstr(session('url.intended'), 'time_tracker'))
+                {{ trans('texts.time_tracker_login') }}
+            @else
+                {{ trans('texts.account_login') }}
+            @endif
+        </h2>
         <hr class="green">
 
         @if (count($errors->all()))
@@ -77,13 +83,17 @@
                     {!! link_to('/recover_password', trans('texts.recover_password')) !!}
                 </div>
                 <div class="col-md-5 col-sm-12">
-                    {!! link_to(NINJA_WEB_URL.'/knowledgebase/', trans('texts.knowledge_base'), ['target' => '_blank']) !!}
+                    @if (Utils::isTimeTracker())
+                        {!! link_to('#', trans('texts.self_host_login'), ['onclick' => 'setSelfHostUrl()']) !!}
+                    @else
+                        {!! link_to(NINJA_WEB_URL.'/knowledgebase/', trans('texts.knowledge_base'), ['target' => '_blank']) !!}
+                    @endif
                 </div>
             @endif
         </div>
         {!! Former::close() !!}
 
-        @if(Utils::allowNewAccounts())
+        @if (Utils::allowNewAccounts() && ! strstr(session('url.intended'), 'time_tracker'))
             <div class="row sign-up">
                 <div class="col-md-3 col-md-offset-3 col-xs-12">
                     <h3>{{trans('texts.not_a_member_yet')}}</h3>
@@ -104,7 +114,49 @@
             } else {
                 $('#email').focus();
             }
+
+            @if (Utils::isTimeTracker())
+                if (isStorageSupported()) {
+                    var selfHostUrl = localStorage.getItem('last:time_tracker:url');
+                    if (selfHostUrl) {
+                        location.href = selfHostUrl;
+                        return;
+                    }
+                    $('#email').change(function() {
+                        localStorage.setItem('last:time_tracker:email', $('#email').val());
+                    })
+                    var email = localStorage.getItem('last:time_tracker:email');
+                    if (email) {
+                        $('#email').val(email);
+                        $('#password').focus();
+                    }
+                }
+            @endif
         })
+
+        @if (Utils::isTimeTracker())
+            function setSelfHostUrl() {
+                if (! isStorageSupported()) {
+                    swal("{{ trans('texts.local_storage_required') }}");
+                    return;
+                }
+                swal({
+                    title: "{{ trans('texts.set_self_hoat_url') }}",
+                    input: 'text',
+                    showCancelButton: true,
+                    confirmButtonText: 'Save',
+                }).then(function (value) {
+                    if (! value || value.indexOf('http') !== 0) {
+                        swal("{{ trans('texts.invalid_url') }}")
+                        return;
+                    }
+                    value = value.replace(/\/+$/, '') + '/time_tracker';
+                    localStorage.setItem('last:time_tracker:url', value);
+                    location.reload();
+                }).catch(swal.noop);
+            }
+        @endif
+
     </script>
 
 @endsection

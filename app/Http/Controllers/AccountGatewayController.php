@@ -17,6 +17,7 @@ use Utils;
 use Validator;
 use View;
 use WePay;
+use File;
 
 class AccountGatewayController extends BaseController
 {
@@ -89,26 +90,23 @@ class AccountGatewayController extends BaseController
 
         $account = Auth::user()->account;
         $accountGatewaysIds = $account->gatewayIds();
-        $otherProviders = Input::get('other_providers');
-
-        if (! env('WEPAY_CLIENT_ID') || Gateway::hasStandardGateway($accountGatewaysIds)) {
-            $otherProviders = true;
-        }
+        $wepay = Input::get('wepay');
 
         $data = self::getViewModel();
         $data['url'] = 'gateways';
         $data['method'] = 'POST';
         $data['title'] = trans('texts.add_gateway');
 
-        if ($otherProviders) {
+        if ($wepay) {
+            return View::make('accounts.account_gateway_wepay', $data);
+        } else {
             $availableGatewaysIds = $account->availableGatewaysIds();
             $data['primaryGateways'] = Gateway::primary($availableGatewaysIds)->orderBy('sort_order')->get();
             $data['secondaryGateways'] = Gateway::secondary($availableGatewaysIds)->orderBy('name')->get();
             $data['hiddenFields'] = Gateway::$hiddenFields;
+            $data['accountGatewaysIds'] = $accountGatewaysIds;
 
             return View::make('accounts.account_gateway', $data);
-        } else {
-            return View::make('accounts.account_gateway_wepay', $data);
         }
     }
 
@@ -122,9 +120,9 @@ class AccountGatewayController extends BaseController
         $creditCards = [];
         foreach ($creditCardsArray as $card => $name) {
             if ($selectedCards > 0 && ($selectedCards & $card) == $card) {
-                $creditCards[$name['text']] = ['value' => $card, 'data-imageUrl' => asset($name['card']), 'checked' => 'checked'];
+                $creditCards['<div>' . $name['text'] . '</div>'] = ['value' => $card, 'data-imageUrl' => asset($name['card']), 'checked' => 'checked'];
             } else {
-                $creditCards[$name['text']] = ['value' => $card, 'data-imageUrl' => asset($name['card'])];
+                $creditCards['<div>' . $name['text'] . '</div>'] = ['value' => $card, 'data-imageUrl' => asset($name['card'])];
             }
         }
 
@@ -154,7 +152,7 @@ class AccountGatewayController extends BaseController
             'config' => false,
             'gateways' => $gateways,
             'creditCardTypes' => $creditCards,
-            'countGateways' => count($currentGateways),
+            'countGateways' => $currentGateways->count(),
         ];
     }
 
@@ -185,6 +183,8 @@ class AccountGatewayController extends BaseController
 
         if ($gatewayId == GATEWAY_DWOLLA) {
             $optional = array_merge($optional, ['key', 'secret']);
+        } elseif ($gatewayId == GATEWAY_PAYMILL) {
+            $rules['publishable_key'] = 'required';
         } elseif ($gatewayId == GATEWAY_STRIPE) {
             if (Utils::isNinjaDev()) {
                 // do nothing - we're unable to acceptance test with StripeJS
@@ -212,7 +212,8 @@ class AccountGatewayController extends BaseController
         $validator = Validator::make(Input::all(), $rules);
 
         if ($validator->fails()) {
-            return Redirect::to('gateways/create?other_providers=' . ($gatewayId == GATEWAY_WEPAY ? 'false' : 'true'))
+            $url = $accountGatewayPublicId ? "/gateways/{$accountGatewayPublicId}/edit" : 'gateways/create?other_providers=' . ($gatewayId == GATEWAY_WEPAY ? 'false' : 'true');
+            return Redirect::to($url)
                 ->withErrors($validator)
                 ->withInput();
         } else {
@@ -257,7 +258,7 @@ class AccountGatewayController extends BaseController
                     if (! $value && in_array($field, ['testMode', 'developerMode', 'sandbox'])) {
                         // do nothing
                     } elseif ($gatewayId == GATEWAY_CUSTOM) {
-                        $config->$field = strip_tags($value);
+                        $config->$field = Utils::isNinjaProd() ? strip_tags($value) : $value;
                     } else {
                         $config->$field = $value;
                     }
@@ -297,6 +298,15 @@ class AccountGatewayController extends BaseController
             if ($gatewayId == GATEWAY_STRIPE) {
                 $config->enableAlipay = boolval(Input::get('enable_alipay'));
                 $config->enableSofort = boolval(Input::get('enable_sofort'));
+                $config->enableSepa = boolval(Input::get('enable_sepa'));
+                $config->enableBitcoin = boolval(Input::get('enable_bitcoin'));
+                $config->enableApplePay = boolval(Input::get('enable_apple_pay'));
+
+                if ($config->enableApplePay && $uploadedFile = request()->file('apple_merchant_id')) {
+                    $config->appleMerchantId = File::get($uploadedFile);
+                } elseif ($oldConfig && ! empty($oldConfig->appleMerchantId)) {
+                    $config->appleMerchantId = $oldConfig->appleMerchantId;
+                }
             }
 
             if ($gatewayId == GATEWAY_STRIPE || $gatewayId == GATEWAY_WEPAY) {
@@ -316,6 +326,7 @@ class AccountGatewayController extends BaseController
 
             $accountGateway->accepted_credit_cards = $cardCount;
             $accountGateway->show_address = Input::get('show_address') ? true : false;
+            $accountGateway->show_shipping_address = Input::get('show_shipping_address') ? true : false;
             $accountGateway->update_address = Input::get('update_address') ? true : false;
             $accountGateway->setConfig($config);
 

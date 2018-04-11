@@ -24,6 +24,7 @@
 
     {{ Former::populate($account) }}
     {{ Former::populateField('pdf_email_attachment', intval($account->pdf_email_attachment)) }}
+    {{ Former::populateField('ubl_email_attachment', intval($account->ubl_email_attachment)) }}
     {{ Former::populateField('document_email_attachment', intval($account->document_email_attachment)) }}
     {{ Former::populateField('enable_email_markup', intval($account->enable_email_markup)) }}
     {{ Former::populateField('bcc_email', $account->account_email_settings->bcc_email) }}
@@ -47,14 +48,20 @@
             {!! Former::checkbox('pdf_email_attachment')
                     ->text(trans('texts.enable'))
                     ->value(1)
-                    ->help( ! Utils::isNinja() ? (config('pdf.phantomjs.bin_path') ? (config('pdf.phantomjs.cloud_key') ? 'phantomjs_local_and_cloud' : 'phantomjs_local') : trans('texts.phantomjs_help', [
+                    ->help(Utils::isNinjaProd() ? '' : (config('pdf.phantomjs.bin_path') ? (config('pdf.phantomjs.cloud_key') ? trans('texts.phantomjs_local_and_cloud') : trans('texts.phantomjs_local')) : trans('texts.phantomjs_help', [
                         'link_phantom' => link_to('https://phantomjscloud.com/', 'phantomjscloud.com', ['target' => '_blank']),
                         'link_docs' => link_to('http://docs.invoiceninja.com/en/latest/configure.html#phantomjs', 'PhantomJS', ['target' => '_blank'])
-                    ])) : false) !!}
+                    ])) . ' | ' . link_to('/test_headless', trans('texts.test'), ['target' => '_blank'])) !!}
 
             {!! Former::checkbox('document_email_attachment')
                     ->text(trans('texts.enable'))
                     ->value(1) !!}
+
+            {!! Former::checkbox('ubl_email_attachment')
+                    ->text(trans('texts.enable'))
+                    ->label(sprintf('%s [%s]', trans('texts.ubl_email_attachment'), trans('texts.beta')))
+                    ->value(1) !!}
+
 
             &nbsp;
 
@@ -96,6 +103,9 @@
         <div class="panel-body">
             {!! Former::textarea('email_footer')->style('display:none')->raw() !!}
             <div id="signatureEditor" class="form-control" style="min-height:160px" onclick="focusEditor()"></div>
+            <div class="pull-right" style="padding-top:10px;text-align:right">
+                {!! Button::normal(trans('texts.raw'))->withAttributes(['onclick' => 'showRaw()'])->small() !!}
+            </div>
             @include('partials/quill_toolbar', ['name' => 'signature'])
         </div>
     </div>
@@ -105,6 +115,30 @@
             {!! Button::success(trans('texts.save'))->large()->submit()->appendIcon(Icon::create('floppy-disk')) !!}
         </center>
     @endif
+
+    <div class="modal fade" id="rawModal" tabindex="-1" role="dialog" aria-labelledby="rawModalLabel" aria-hidden="true">
+        <div class="modal-dialog" style="width:800px">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                    <h4 class="modal-title" id="rawModalLabel">{{ trans('texts.raw_html') }}</h4>
+                </div>
+
+                <div class="container" style="width: 100%; padding-bottom: 0px !important">
+                <div class="panel panel-default">
+                <div class="modal-body">
+                    <textarea id="raw-textarea" rows="20" style="width:100%"></textarea>
+                </div>
+                </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">{{ trans('texts.close') }}</button>
+                    <button type="button" onclick="updateRaw()" class="btn btn-success" data-dismiss="modal">{{ trans('texts.update') }}</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div class="modal fade" id="designHelpModal" tabindex="-1" role="dialog" aria-labelledby="designHelpModalLabel" aria-hidden="true">
         <div class="modal-dialog" style="min-width:150px">
@@ -169,6 +203,18 @@
 
         function focusEditor() {
             editor.focus();
+        }
+
+        function showRaw() {
+            var signature = $('#email_footer').val();
+            $('#raw-textarea').val(formatXml(signature));
+            $('#rawModal').modal('show');
+        }
+
+        function updateRaw() {
+            var value = $('#raw-textarea').val();
+            editor.setHTML(value);
+            $('#email_footer').val(value);
         }
 
         $('.email_design_id .input-group-addon').click(function() {

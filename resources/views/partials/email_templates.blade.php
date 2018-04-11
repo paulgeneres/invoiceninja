@@ -1,14 +1,22 @@
 <script type="text/javascript">
 
-    function renderEmailTemplate(str, invoice, isQuote) {
+    function renderEmailTemplate(str, invoice, entityType) {
         if (!str) {
             return '';
         }
 
-        var passwordHtml = "{!! $account->isPro() && $account->enable_portal_password && $account->send_portal_password?'<br/>'.trans('texts.password').': XXXXXXXXX<br/>':'' !!}";
+        if (invoice && invoice.invoice_type_id == {{ INVOICE_TYPE_QUOTE }} || entityType == '{{ ENTITY_QUOTE }}') {
+            var viewButton = {!! json_encode(Form::flatButton('view_quote', '#0b4d78')) !!} + '$password';
+        } else if (entityType == '{{ ENTITY_PROPOSAL }}') {
+            var viewButton = {!! json_encode(Form::flatButton('view_proposal', '#0b4d78')) !!} + '$password';
+        } else {
+            var viewButton = {!! json_encode(Form::flatButton('view_invoice', '#0b4d78')) !!} + '$password';
+        }
+
+        var passwordHtml = {!! $account->isPro() && $account->enable_portal_password && $account->send_portal_password ? json_encode('<br/>' . trans('texts.password') . ': XXXXXXXXX<br/>') : json_encode('') !!};
 
         @if ($account->isPro())
-            var documentsHtml = "{!! trans('texts.email_documents_header').'<ul><li><a>'.trans('texts.email_documents_example_1').'</a></li><li><a>'.trans('texts.email_documents_example_2').'</a></li></ul>' !!}";
+            var documentsHtml = {!! json_encode(trans('texts.email_documents_header') . '<ul><li><a>' . trans('texts.email_documents_example_1') . '</a></li><li><a>' . trans('texts.email_documents_example_2') . '</a></li></ul>') !!};
         @else
             var documentsHtml = "";
         @endif
@@ -17,9 +25,11 @@
             'footer': {!! json_encode($account->getEmailFooter()) !!},
             'emailSignature': {!! json_encode($account->getEmailFooter()) !!},
             'account': "{{ $account->getDisplayName() }}",
-            'dueDate': invoice ? invoice.due_date : "{{ $account->formatDate($account->getDateTime()) }}",
+            'dueDate': invoice ? invoice.partial_due_date || invoice.due_date : "{{ $account->formatDate($account->getDateTime()) }}",
             'invoiceDate': invoice ? invoice.invoice_date : "{{ $account->formatDate($account->getDateTime()) }}",
             'client': invoice ? getClientDisplayName(invoice.client) : "{{ trans('texts.client_name') }}",
+            'idNumber' : invoice ? invoice.client.id_number : '12345678',
+            'vatNumber' : invoice ? invoice.client.vat_number : '12345678',
             'amount': invoice ? formatMoneyInvoice(parseFloat(invoice.partial) || parseFloat(invoice.balance_amount), invoice) : formatMoneyAccount(100, account),
             'balance': invoice ? formatMoneyInvoice(parseFloat(invoice.balance), invoice) : formatMoneyAccount(100, account),
             'total': invoice ? formatMoneyInvoice(parseFloat(invoice.amount), invoice) : formatMoneyAccount(100, account),
@@ -31,15 +41,13 @@
             'number': invoice ? invoice.invoice_number : '0001',
             'password': passwordHtml,
             'documents': documentsHtml,
-            'viewLink': '{{ link_to('#', url('/view/...')) }}$password',
-            'viewButton': isQuote || (invoice && invoice.invoice_type_id == {{ INVOICE_TYPE_QUOTE }}) ?
-                '{!! Form::flatButton('view_quote', '#0b4d78') !!}$password' :
-                '{!! Form::flatButton('view_invoice', '#0b4d78') !!}$password',
-            'paymentLink': '{{ link_to('#', url('/payment/...')) }}$password',
-            'paymentButton': '{!! Form::flatButton('pay_now', '#36c157') !!}$password',
+            'viewLink': '{{ link_to('#', auth()->user()->account->getBaseUrl() . '/...') }}$password',
+            'viewButton': viewButton,
+            'paymentLink': '{{ link_to('#', auth()->user()->account->getBaseUrl() . '/...') }}$password',
+            'paymentButton': {!! json_encode(Form::flatButton('pay_now', '#36c157')) !!} + '$password',
             'autoBill': '{{ trans('texts.auto_bill_notification_placeholder') }}',
-            'portalLink': "{{ URL::to('/client/portal/...') }}",
-            'portalButton': '{!! Form::flatButton('view_portal', '#36c157') !!}',
+            'portalLink': "{{ auth()->user()->account->getBaseUrl() . '/...' }}",
+            'portalButton': {!! json_encode(Form::flatButton('view_portal', '#36c157')) !!},
             'customClient1': invoice ? invoice.client.custom_value1 : 'custom value',
             'customClient2': invoice ? invoice.client.custom_value2 : 'custom value',
             'customContact1': invoice ? invoice.client.contacts[0].custom_value1 : 'custom value',
@@ -51,7 +59,7 @@
         // Add any available payment method links
         @foreach (\App\Models\Gateway::$gatewayTypes as $type)
             @if ($type != GATEWAY_TYPE_TOKEN)
-                {!! "keys['" . Utils::toCamelCase(\App\Models\GatewayType::getAliasFromId($type)) . "Link'] = '" . URL::to('/payment/...') . "';" !!}
+                {!! "keys['" . Utils::toCamelCase(\App\Models\GatewayType::getAliasFromId($type)) . "Link'] = '" . auth()->user()->account->getBaseUrl() . "/...';" !!}
                 {!! "keys['" . Utils::toCamelCase(\App\Models\GatewayType::getAliasFromId($type)) . "Button'] = '" . Form::flatButton('pay_now', '#36c157') . "';" !!}
             @endif
         @endforeach
@@ -171,6 +179,9 @@
                             </ul>
                         @endif
                     </div>
+                </div><br/>
+                <div class="text-muted">
+                    {{ trans('texts.amount_variable_help') }}
                 </div>
             </div>
             </div>

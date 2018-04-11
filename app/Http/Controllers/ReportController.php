@@ -2,13 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ExportReportResults;
+use App\Jobs\LoadPostmarkStats;
+use App\Jobs\RunReport;
 use App\Models\Account;
+use App\Models\ScheduledReport;
 use Auth;
 use Input;
-use Str;
 use Utils;
 use View;
-use Excel;
+use Carbon;
+use Validator;
+
 
 /**
  * Class ReportController.
@@ -25,7 +30,7 @@ class ReportController extends BaseController
 
         if (Auth::user()->account->hasFeature(FEATURE_REPORTS)) {
             $account = Account::where('id', '=', Auth::user()->account->id)
-                            ->with(['clients.invoices.invoice_items', 'clients.contacts'])
+                            ->with(['clients.invoices.invoice_items', 'clients.contacts', 'clients.currency'])
                             ->first();
             $account = $account->hideFieldsForViz();
             $clients = $account->clients;
@@ -72,6 +77,8 @@ class ReportController extends BaseController
             'activity',
             'aging',
             'client',
+            'credit',
+            'document',
             'expense',
             'invoice',
             'payment',
@@ -93,20 +100,31 @@ class ReportController extends BaseController
 
         if (Auth::user()->account->hasFeature(FEATURE_REPORTS)) {
             $isExport = $action == 'export';
-            $reportClass = '\\App\\Ninja\\Reports\\' . Str::studly($reportType) . 'Report';
-            $options = [
+            $config = [
                 'date_field' => $dateField,
-                'invoice_status' => request()->invoice_status,
-                'group_dates_by' => request()->group_dates_by,
+                'status_ids' => request()->status_ids,
+                'group' => request()->group,
+                'subgroup' => request()->subgroup,
+                'document_filter' => request()->document_filter,
+                'currency_type' => request()->currency_type,
+                'export_format' => $format,
+                'start_date' => $params['startDate'],
+                'end_date' => $params['endDate'],
             ];
-            $report = new $reportClass($startDate, $endDate, $isExport, $options);
-            if (Input::get('report_type')) {
-                $report->run();
-            }
-            $params['report'] = $report;
-            $params = array_merge($params, $report->results());
-            if ($isExport) {
-                return self::export($format, $reportType, $params);
+            $report = dispatch(new RunReport(auth()->user(), $reportType, $config, $isExport));
+            $params = array_merge($params, $report->exportParams);
+            switch ($action) {
+                case 'export':
+                    return dispatch(new ExportReportResults(auth()->user(), $format, $reportType, $params))->export($format);
+                    break;
+                case 'schedule':
+                    self::schedule($params, $config);
+                    return redirect('/reports');
+                    break;
+                case 'cancel_schedule':
+                    self::cancelSchdule();
+                    return redirect('/reports');
+                    break;
             }
         } else {
             $params['columns'] = [];
@@ -115,84 +133,64 @@ class ReportController extends BaseController
             $params['report'] = false;
         }
 
-        return View::make('reports.chart_builder', $params);
+        $params['scheduledReports'] = ScheduledReport::scope()->whereUserId(auth()->user()->id)->get();
+
+        return View::make('reports.report_builder', $params);
     }
 
-    /**
-     * @param $format
-     * @param $reportType
-     * @param $params
-     * @todo: Add summary to export
-     */
-    private function export($format, $reportType, $params)
+    private function schedule($params, $options)
     {
-        if (! Auth::user()->hasPermission('view_all')) {
-            exit;
+        $validator = Validator::make(request()->all(), [
+            'frequency' => 'required|in:daily,weekly,biweekly,monthly',
+            'send_date' => 'required',
+        ]);
+
+        if ($validator->fails()) {
+            session()->now('message', trans('texts.scheduled_report_error'));
+        } else {
+            $options['report_type'] = $params['reportType'];
+            $options['range'] = request('range');
+            $options['start_date_offset'] = $options['range'] ? '' : Carbon::parse($params['startDate'])->diffInDays(null, false); // null,false to get the relative/non-absolute diff
+            $options['end_date_offset'] = $options['range'] ? '' : Carbon::parse($params['endDate'])->diffInDays(null, false);
+
+            unset($options['start_date']);
+            unset($options['end_date']);
+            unset($options['group']);
+            unset($options['subgroup']);
+
+            $schedule = ScheduledReport::createNew();
+            $schedule->config = json_encode($options);
+            $schedule->frequency = request('frequency');
+            $schedule->send_date = Utils::toSqlDate(request('send_date'));
+            $schedule->save();
+
+            session()->flash('message', trans('texts.created_scheduled_report'));
         }
+    }
 
-        $format  = strtolower($format);
-        $data    = $params['displayData'];
-        $columns = $params['columns'];
-        $totals  = $params['reportTotals'];
-        $report  = $params['report'];
+    private function cancelSchdule()
+    {
+        ScheduledReport::scope()
+            ->whereUserId(auth()->user()->id)
+            ->wherePublicId(request('scheduled_report_id'))
+            ->delete();
 
-        $filename = "{$params['startDate']}-{$params['endDate']}_invoiceninja-".strtolower(Utils::normalizeChars(trans("texts.$reportType")))."-report";
+        session()->flash('message', trans('texts.deleted_scheduled_report'));
+    }
 
-        $formats = ['csv', 'pdf', 'xlsx'];
-        if(!in_array($format, $formats)) {
-            throw new \Exception("Invalid format request to export report");
-        }
+    public function showEmailReport()
+    {
+        $data = [
+            'account' => auth()->user()->account,
+        ];
 
-        //Get labeled header
-        $columns_labeled = $report->tableHeaderArray();
+        return view('reports.emails', $data);
+    }
 
-        /*$summary = [];
-        if(count(array_values($totals))) {
-            $summary[] = array_merge([
-                trans("texts.totals")
-            ], array_map(function ($key) {return trans("texts.{$key}");}, array_keys(array_values(array_values($totals)[0])[0])));
-        }
+    public function loadEmailReport($startDate, $endDate)
+    {
+        $data = dispatch(new LoadPostmarkStats($startDate, $endDate));
 
-        foreach ($totals as $currencyId => $each) {
-            foreach ($each as $dimension => $val) {
-                $tmp   = [];
-                $tmp[] = Utils::getFromCache($currencyId, 'currencies')->name . (($dimension) ? ' - ' . $dimension : '');
-
-                foreach ($val as $id => $field) $tmp[] = Utils::formatMoney($field, $currencyId);
-
-                $summary[] = $tmp;
-            }
-        }
-
-        dd($summary);*/
-
-        return Excel::create($filename, function($excel) use($report, $data, $reportType, $format, $columns_labeled) {
-            $excel->sheet(trans("texts.$reportType"), function($sheet) use($report, $data, $format, $columns_labeled) {
-
-                $sheet->setOrientation('landscape');
-                $sheet->freezeFirstRow();
-
-                //Add border on PDF
-                if($format == 'pdf')
-                    $sheet->setAllBorders('thin');
-
-                $sheet->rows(array_merge(
-                    [array_map(function($col) {return $col['label'];}, $columns_labeled)],
-                    $data
-                ));
-
-                //Styling header
-                $sheet->cells('A1:'.Utils::num2alpha(count($columns_labeled)-1).'1', function($cells) {
-                    $cells->setBackground('#777777');
-                    $cells->setFontColor('#FFFFFF');
-                    $cells->setFontSize(13);
-                    $cells->setFontFamily('Calibri');
-                    $cells->setFontWeight('bold');
-                });
-
-
-                $sheet->setAutoSize(true);
-            });
-        })->export($format);
+        return response()->json($data);
     }
 }

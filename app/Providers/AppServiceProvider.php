@@ -10,6 +10,8 @@ use Utils;
 use Validator;
 use Queue;
 use Illuminate\Queue\Events\JobProcessing;
+use Illuminate\Support\Facades\Route;
+
 
 /**
  * Class AppServiceProvider.
@@ -23,7 +25,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot()
     {
-        // support selecting job database 
+        Route::singularResourceParameters(false);
+
+        // support selecting job database
         Queue::before(function (JobProcessing $event) {
             $body = $event->job->getRawBody();
             preg_match('/db-ninja-[\d+]/', $body, $matches);
@@ -92,6 +96,7 @@ class AppServiceProvider extends ServiceProvider
         });
 
         Form::macro('breadcrumbs', function ($status = false) {
+
             $str = '<ol class="breadcrumb">';
 
             // Get the breadcrumbs by exploding the current path.
@@ -129,6 +134,9 @@ class AppServiceProvider extends ServiceProvider
                 if ($i == count($crumbs) - 1) {
                     $str .= "<li class='active'>$name</li>";
                 } else {
+                    if (count($crumbs) > 2 && $crumbs[1] == 'proposals' && $crumb != 'proposals') {
+                        $crumb = 'proposals/' . $crumb;
+                    }
                     $str .= '<li>'.link_to($crumb, $name).'</li>';
                 }
             }
@@ -200,8 +208,8 @@ class AppServiceProvider extends ServiceProvider
         Validator::extend('valid_invoice_items', function ($attribute, $value, $parameters) {
             $total = 0;
             foreach ($value as $item) {
-                $qty = ! empty($item['qty']) ? $item['qty'] : 1;
-                $cost = ! empty($item['cost']) ? $item['cost'] : 1;
+                $qty = ! empty($item['qty']) ? Utils::parseFloat($item['qty']) : 1;
+                $cost = ! empty($item['cost']) ? Utils::parseFloat($item['cost']) : 1;
                 $total += $qty * $cost;
             }
 

@@ -7,9 +7,11 @@ use Closure;
 use App\Models\LookupAccount;
 use App\Models\LookupContact;
 use App\Models\LookupInvitation;
+use App\Models\LookupProposalInvitation;
 use App\Models\LookupAccountToken;
 use App\Models\LookupUser;
 use Auth;
+use Utils;
 
 class DatabaseLookup
 {
@@ -42,14 +44,28 @@ class DatabaseLookup
         } elseif ($guard == 'contact') {
             if ($key = request()->invitation_key) {
                 LookupInvitation::setServerByField('invitation_key', $key);
+            } elseif ($key = request()->proposal_invitation_key) {
+                LookupProposalInvitation::setServerByField('invitation_key', $key);
             } elseif ($key = request()->contact_key ?: session('contact_key')) {
                 LookupContact::setServerByField('contact_key', $key);
+            } elseif ($key = request()->account_key) {
+                LookupAccount::setServerByField('account_key', $key);
+            } else {
+                $subdomain = Utils::getSubdomain(\Request::server('HTTP_HOST'));
+                if ($subdomain != 'app') {
+                    LookupAccount::setServerByField('subdomain', $subdomain);
+                }
             }
         } elseif ($guard == 'postmark') {
             LookupInvitation::setServerByField('message_id', request()->MessageID);
         } elseif ($guard == 'account') {
             if ($key = request()->account_key) {
                 LookupAccount::setServerByField('account_key', $key);
+            } else {
+                $subdomain = Utils::getSubdomain(\Request::server('HTTP_HOST'));
+                if ($subdomain != 'app') {
+                    LookupAccount::setServerByField('subdomain', $subdomain);
+                }
             }
         } elseif ($guard == 'license') {
             config(['database.default' => DB_NINJA_1]);

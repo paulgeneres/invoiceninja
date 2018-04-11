@@ -58,9 +58,19 @@ class RecurringExpenseDatatable extends EntityDatatable
             ],
 */
             [
+                'frequency',
+                function ($model) {
+                    $frequency = strtolower($model->frequency);
+                    $frequency = preg_replace('/\s/', '_', $frequency);
+
+                    $str = link_to("recurring_expenses/{$model->public_id}/edit", trans('texts.freq_'.$frequency))->toHtml();
+                    return $this->addNote($str, $model->private_notes);
+                },
+            ],
+            [
                 'amount',
                 function ($model) {
-                    $amount = Utils::calculateTaxes($model->amount, $model->tax_rate1, $model->tax_rate2);
+                    $amount = $model->amount + Utils::calculateTaxes($model->amount, $model->tax_rate1, $model->tax_rate2);
                     $str = Utils::formatMoney($amount, $model->expense_currency_id);
 
                     /*
@@ -88,16 +98,7 @@ class RecurringExpenseDatatable extends EntityDatatable
             [
                 'public_notes',
                 function ($model) {
-                    return $model->public_notes != null ? substr($model->public_notes, 0, 100) : '';
-                },
-            ],
-            [
-                'frequency',
-                function ($model) {
-                    $frequency = strtolower($model->frequency);
-                    $frequency = preg_replace('/\s/', '_', $frequency);
-
-                    return link_to("recurring_expenses/{$model->public_id}/edit", trans('texts.freq_'.$frequency))->toHtml();
+                    return $this->showWithTooltip($model->public_notes, 100);
                 },
             ],
         ];

@@ -43,8 +43,18 @@ class StripePaymentDriver extends BasePaymentDriver
             } elseif ($sofortEnabled) {
                 $types[] = GATEWAY_TYPE_SOFORT;
             }
+
+            if ($gateway->getSepaEnabled()) {
+                $types[] = GATEWAY_TYPE_SEPA;
+            }
+            if ($gateway->getBitcoinEnabled()) {
+                $types[] = GATEWAY_TYPE_BITCOIN;
+            }
             if ($gateway->getAlipayEnabled()) {
                 $types[] = GATEWAY_TYPE_ALIPAY;
+            }
+            if ($gateway->getApplePayEnabled()) {
+                $types[] = GATEWAY_TYPE_APPLE_PAY;
             }
         }
 
@@ -53,12 +63,16 @@ class StripePaymentDriver extends BasePaymentDriver
 
     public function tokenize()
     {
-        return $this->accountGateway->getPublishableStripeKey();
+        return $this->accountGateway->getPublishableKey();
     }
 
     public function rules()
     {
         $rules = parent::rules();
+
+        if ($this->isGatewayType(GATEWAY_TYPE_APPLE_PAY)) {
+            return ['sourceToken' => 'required'];
+        }
 
         if ($this->isGatewayType(GATEWAY_TYPE_BANK_TRANSFER)) {
             $rules['authorize_ach'] = 'required';
@@ -84,7 +98,7 @@ class StripePaymentDriver extends BasePaymentDriver
 
     public function shouldUseSource()
     {
-        return in_array($this->gatewayType, [GATEWAY_TYPE_ALIPAY, GATEWAY_TYPE_SOFORT]);
+        return in_array($this->gatewayType, [GATEWAY_TYPE_ALIPAY, GATEWAY_TYPE_SOFORT, GATEWAY_TYPE_BITCOIN]);
     }
 
     protected function checkCustomerExists($customer)
@@ -100,7 +114,7 @@ class StripePaymentDriver extends BasePaymentDriver
         $this->tokenResponse = $response->getData();
 
         // import Stripe tokens created before payment methods table was added
-        if (! count($customer->payment_methods)) {
+        if (! $customer->payment_methods->count()) {
             if ($paymentMethod = $this->createPaymentMethod($customer)) {
                 $customer->default_payment_method_id = $paymentMethod->id;
                 $customer->save();
@@ -217,7 +231,9 @@ class StripePaymentDriver extends BasePaymentDriver
 
         // For older users the Stripe account may just have the customer token but not the card version
         // In that case we'd use GATEWAY_TYPE_TOKEN even though we're creating the credit card
-        if ($this->isGatewayType(GATEWAY_TYPE_CREDIT_CARD) || $this->isGatewayType(GATEWAY_TYPE_TOKEN)) {
+        if ($this->isGatewayType(GATEWAY_TYPE_CREDIT_CARD)
+            || $this->isGatewayType(GATEWAY_TYPE_APPLE_PAY)
+            || $this->isGatewayType(GATEWAY_TYPE_TOKEN)) {
             $paymentMethod->expiration = $source['exp_year'] . '-' . $source['exp_month'] . '-01';
             $paymentMethod->payment_type_id = PaymentType::parseCardType($source['brand']);
         } elseif ($this->isGatewayType(GATEWAY_TYPE_BANK_TRANSFER)) {
@@ -240,13 +256,16 @@ class StripePaymentDriver extends BasePaymentDriver
         $isBank = $this->isGatewayType(GATEWAY_TYPE_BANK_TRANSFER, $paymentMethod);
         $isAlipay = $this->isGatewayType(GATEWAY_TYPE_ALIPAY, $paymentMethod);
         $isSofort = $this->isGatewayType(GATEWAY_TYPE_SOFORT, $paymentMethod);
+        $isBitcoin = $this->isGatewayType(GATEWAY_TYPE_BITCOIN, $paymentMethod);
 
-        if ($isBank || $isAlipay || $isSofort) {
+        if ($isBank || $isAlipay || $isSofort || $isBitcoin) {
             $payment->payment_status_id = $this->purchaseResponse['status'] == 'succeeded' ? PAYMENT_STATUS_COMPLETED : PAYMENT_STATUS_PENDING;
             if ($isAlipay) {
                 $payment->payment_type_id = PAYMENT_TYPE_ALIPAY;
             } elseif ($isSofort) {
                 $payment->payment_type_id = PAYMENT_TYPE_SOFORT;
+            } elseif ($isBitcoin) {
+                $payment->payment_type_id = PAYMENT_TYPE_BITCOIN;
             }
         }
 
@@ -351,6 +370,7 @@ class StripePaymentDriver extends BasePaymentDriver
         $amount = intval($this->invoice()->getRequestedAmount() * 100);
         $invoiceNumber = $this->invoice()->invoice_number;
         $currency = $this->client()->getCurrencyCode();
+        $email = $this->contact()->email;
         $gatewayType = GatewayType::getAliasFromId($this->gatewayType);
         $redirect = url("/complete_source/{$this->invitation->invitation_key}/{$gatewayType}");
         $country = $this->client()->country ? $this->client()->country->iso_3166_2 : ($this->account()->country ? $this->account()->country->iso_3166_2 : '');
@@ -361,6 +381,12 @@ class StripePaymentDriver extends BasePaymentDriver
                 throw new Exception('Alipay is not enabled');
             }
             $type = 'alipay';
+        } elseif ($this->gatewayType == GATEWAY_TYPE_BITCOIN) {
+            if (! $this->accountGateway->getBitcoinEnabled()) {
+                throw new Exception('Bitcoin is not enabled');
+            }
+            $type = 'bitcoin';
+            $extra = "&owner[email]={$email}";
         } else {
             if (! $this->accountGateway->getSofortEnabled()) {
                 throw new Exception('Sofort is not enabled');
@@ -376,7 +402,18 @@ class StripePaymentDriver extends BasePaymentDriver
             $this->invitation->transaction_reference = $response['id'];
             $this->invitation->save();
 
-            return redirect($response['redirect']['url']);
+            if ($this->gatewayType == GATEWAY_TYPE_BITCOIN) {
+                return view('payments/stripe/bitcoin', [
+                    'client' => $this->client(),
+                    'account' => $this->account(),
+                    'invitation' => $this->invitation,
+                    'invoiceNumber' => $invoiceNumber,
+                    'amount' => $this->invoice()->getRequestedAmount(),
+                    'source' => $response,
+                ]);
+            } else {
+                return redirect($response['redirect']['url']);
+            }
         } else {
             throw new Exception($response);
         }
@@ -471,6 +508,10 @@ class StripePaymentDriver extends BasePaymentDriver
             $payment = Payment::scope(false, $accountId)->where('transaction_reference', '=', $sourceRef)->first();
 
             if (! $payment) {
+                return false;
+            }
+
+            if ($payment->is_deleted || $payment->invoice->is_deleted) {
                 return false;
             }
 

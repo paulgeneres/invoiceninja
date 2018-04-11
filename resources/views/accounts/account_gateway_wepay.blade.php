@@ -1,5 +1,19 @@
 @extends('header')
 
+@section('head')
+	@parent
+
+    <style type="text/css">
+        label.checkbox-inline {
+            padding-left: 0px;
+        }
+
+        label.checkbox-inline div {
+            padding-left: 20px;
+        }
+    </style>
+@stop
+
 @section('content')
     @parent
 
@@ -61,9 +75,10 @@
                     ->text(trans('texts.update_address_help'))
                     ->value(1) !!}
             {!! Former::checkboxes('creditCardTypes[]')
-                    ->label('Accepted Credit Cards')
+                    ->label('accepted_card_logos')
                     ->checkboxes($creditCardTypes)
                     ->class('creditcard-types')
+                    ->inline()
                     ->value(1) !!}
             {!! Former::checkbox('enable_ach')
                     ->label(trans('texts.ach'))
@@ -145,7 +160,7 @@
 
         <br/>
         <center>
-            {!! Button::normal(trans('texts.use_another_provider'))->large()->asLinkTo(URL::to('/gateways/create?other_providers=true')) !!}
+            {!! Button::normal(trans('texts.cancel'))->large()->asLinkTo(HTMLUtils::previousUrl('/gateways/create'))->appendIcon(Icon::create('remove-circle')) !!}
             {!! Button::success(trans('texts.sign_up_with_wepay'))->submit()->large() !!}
         </center>
 

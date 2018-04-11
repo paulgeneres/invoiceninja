@@ -46,7 +46,8 @@ class PaymentDatatable extends EntityDatatable
             [
                 'transaction_reference',
                 function ($model) {
-                    return $model->transaction_reference ? e($model->transaction_reference) : '<i>'.trans('texts.manual_entry').'</i>';
+                    $str = $model->transaction_reference ? e($model->transaction_reference) : '<i>'.trans('texts.manual_entry').'</i>';
+                    return $this->addNote($str, $model->private_notes);
                 },
             ],
             [
@@ -90,7 +91,13 @@ class PaymentDatatable extends EntityDatatable
             [
                 'amount',
                 function ($model) {
-                    return Utils::formatMoney($model->amount, $model->currency_id, $model->country_id);
+                    $amount = Utils::formatMoney($model->amount, $model->currency_id, $model->country_id);
+
+                    if ($model->exchange_currency_id && $model->exchange_rate != 1) {
+                        $amount .= ' | ' . Utils::formatMoney($model->amount * $model->exchange_rate, $model->exchange_currency_id, $model->country_id);
+                    }
+
+                    return $amount;
                 },
             ],
             [
@@ -136,11 +143,12 @@ class PaymentDatatable extends EntityDatatable
             [
                 trans('texts.refund_payment'),
                 function ($model) {
-                    $max_refund = number_format($model->amount - $model->refunded, 2);
+                    $max_refund = $model->amount - $model->refunded;
                     $formatted = Utils::formatMoney($max_refund, $model->currency_id, $model->country_id);
                     $symbol = Utils::getFromCache($model->currency_id ? $model->currency_id : 1, 'currencies')->symbol;
+                    $local = in_array($model->gateway_id, [GATEWAY_BRAINTREE, GATEWAY_STRIPE, GATEWAY_WEPAY]) || ! $model->gateway_id ? 0 : 1;
 
-                    return "javascript:showRefundModal({$model->public_id}, '{$max_refund}', '{$formatted}', '{$symbol}')";
+                    return "javascript:showRefundModal({$model->public_id}, '{$max_refund}', '{$formatted}', '{$symbol}', {$local})";
                 },
                 function ($model) {
                     return Auth::user()->can('editByOwner', [ENTITY_PAYMENT, $model->user_id])

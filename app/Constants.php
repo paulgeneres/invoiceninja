@@ -2,6 +2,7 @@
 
 if (! defined('APP_NAME')) {
     define('APP_NAME', env('APP_NAME', 'Invoice Ninja'));
+    define('APP_DOMAIN', env('APP_DOMAIN', 'invoiceninja.com'));
     define('CONTACT_EMAIL', env('MAIL_FROM_ADDRESS', env('MAIL_USERNAME')));
     define('CONTACT_NAME', env('MAIL_FROM_NAME'));
     define('SITE_URL', env('APP_URL'));
@@ -22,6 +23,7 @@ if (! defined('APP_NAME')) {
     define('ENTITY_CREDIT', 'credit');
     define('ENTITY_QUOTE', 'quote');
     define('ENTITY_TASK', 'task');
+    define('ENTITY_TASK_STATUS', 'task_status');
     define('ENTITY_ACCOUNT_GATEWAY', 'account_gateway');
     define('ENTITY_USER', 'user');
     define('ENTITY_TOKEN', 'token');
@@ -39,6 +41,12 @@ if (! defined('APP_NAME')) {
     define('ENTITY_PROJECT', 'project');
     define('ENTITY_RECURRING_EXPENSE', 'recurring_expense');
     define('ENTITY_CUSTOMER', 'customer');
+    define('ENTITY_SUBSCRIPTION', 'subscription');
+    define('ENTITY_PROPOSAL', 'proposal');
+    define('ENTITY_PROPOSAL_TEMPLATE', 'proposal_template');
+    define('ENTITY_PROPOSAL_SNIPPET', 'proposal_snippet');
+    define('ENTITY_PROPOSAL_CATEGORY', 'proposal_category');
+    define('ENTITY_PROPOSAL_INVITATION', 'proposal_invitation');
 
     define('INVOICE_TYPE_STANDARD', 1);
     define('INVOICE_TYPE_QUOTE', 2);
@@ -150,6 +158,7 @@ if (! defined('APP_NAME')) {
     define('MAX_DOCUMENT_SIZE', env('MAX_DOCUMENT_SIZE', 10000)); // KB
     define('MAX_EMAIL_DOCUMENTS_SIZE', env('MAX_EMAIL_DOCUMENTS_SIZE', 10000)); // Total KB
     define('MAX_ZIP_DOCUMENTS_SIZE', env('MAX_EMAIL_DOCUMENTS_SIZE', 30000)); // Total KB (uncompressed)
+    define('MAX_EMAILS_SENT_PER_DAY', 500);
     define('DOCUMENT_PREVIEW_SIZE', env('DOCUMENT_PREVIEW_SIZE', 300)); // pixels
     define('DEFAULT_FONT_SIZE', 9);
     define('DEFAULT_HEADER_FONT', 1); // Roboto
@@ -202,10 +211,10 @@ if (! defined('APP_NAME')) {
     define('PAYMENT_STATUS_PARTIALLY_REFUNDED', 5);
     define('PAYMENT_STATUS_REFUNDED', 6);
 
-    define('TASK_STATUS_LOGGED', 1);
-    define('TASK_STATUS_RUNNING', 2);
-    define('TASK_STATUS_INVOICED', 3);
-    define('TASK_STATUS_PAID', 4);
+    define('TASK_STATUS_LOGGED', -1);
+    define('TASK_STATUS_RUNNING', -2);
+    define('TASK_STATUS_INVOICED', -3);
+    define('TASK_STATUS_PAID', -4);
 
     define('EXPENSE_STATUS_LOGGED', 1);
     define('EXPENSE_STATUS_PENDING', 2);
@@ -224,8 +233,15 @@ if (! defined('APP_NAME')) {
     define('FREQUENCY_MONTHLY', 4);
     define('FREQUENCY_TWO_MONTHS', 5);
     define('FREQUENCY_THREE_MONTHS', 6);
-    define('FREQUENCY_SIX_MONTHS', 7);
-    define('FREQUENCY_ANNUALLY', 8);
+    define('FREQUENCY_FOUR_MONTHS', 7);
+    define('FREQUENCY_SIX_MONTHS', 8);
+    define('FREQUENCY_ANNUALLY', 9);
+    define('FREQUENCY_TWO_YEARS', 10);
+
+    define('REPORT_FREQUENCY_DAILY', 'daily');
+    define('REPORT_FREQUENCY_WEEKLY', 'weekly');
+    define('REPORT_FREQUENCY_BIWEEKLY', 'biweekly');
+    define('REPORT_FREQUENCY_MONTHLY', 'monthly');
 
     define('SESSION_TIMEZONE', 'timezone');
     define('SESSION_CURRENCY', 'currency');
@@ -280,10 +296,12 @@ if (! defined('APP_NAME')) {
     define('GATEWAY_DWOLLA', 43);
     define('GATEWAY_CHECKOUT_COM', 47);
     define('GATEWAY_CYBERSOURCE', 49);
+    define('GATEWAY_PAYTRACE', 56);
     define('GATEWAY_WEPAY', 60);
     define('GATEWAY_BRAINTREE', 61);
     define('GATEWAY_CUSTOM', 62);
     define('GATEWAY_GOCARDLESS', 64);
+    define('GATEWAY_PAYMILL', 66);
 
     // The customer exists, but only as a local concept
     // The remote gateway doesn't understand the concept of customers
@@ -298,6 +316,18 @@ if (! defined('APP_NAME')) {
     define('EVENT_DELETE_QUOTE', 7);
     define('EVENT_UPDATE_INVOICE', 8);
     define('EVENT_DELETE_INVOICE', 9);
+    define('EVENT_UPDATE_CLIENT', 10);
+    define('EVENT_DELETE_CLIENT', 11);
+    define('EVENT_DELETE_PAYMENT', 12);
+    define('EVENT_UPDATE_VENDOR', 13);
+    define('EVENT_DELETE_VENDOR', 14);
+    define('EVENT_CREATE_EXPENSE', 15);
+    define('EVENT_UPDATE_EXPENSE', 16);
+    define('EVENT_DELETE_EXPENSE', 17);
+    define('EVENT_CREATE_TASK', 18);
+    define('EVENT_UPDATE_TASK', 19);
+    define('EVENT_DELETE_TASK', 20);
+    define('EVENT_APPROVE_QUOTE', 21);
 
     define('REQUESTED_PRO_PLAN', 'REQUESTED_PRO_PLAN');
     define('NINJA_ACCOUNT_KEY', env('NINJA_ACCOUNT_KEY', 'zg4ylmzDkdkPOT8yoKQw9LTWaoZJx79h'));
@@ -309,7 +339,8 @@ if (! defined('APP_NAME')) {
     define('NINJA_APP_URL', env('NINJA_APP_URL', 'https://app.invoiceninja.com'));
     define('NINJA_DOCS_URL', env('NINJA_DOCS_URL', 'http://docs.invoiceninja.com/en/latest'));
     define('NINJA_DATE', '2000-01-01');
-    define('NINJA_VERSION', '3.7.2' . env('NINJA_VERSION_SUFFIX'));
+    define('NINJA_VERSION', '4.3.1' . env('NINJA_VERSION_SUFFIX'));
+    define('NINJA_TERMS_VERSION', '');
 
     define('SOCIAL_LINK_FACEBOOK', env('SOCIAL_LINK_FACEBOOK', 'https://www.facebook.com/invoiceninja'));
     define('SOCIAL_LINK_TWITTER', env('SOCIAL_LINK_TWITTER', 'https://twitter.com/invoiceninja'));
@@ -340,6 +371,8 @@ if (! defined('APP_NAME')) {
     define('SKYPE_API_URL', 'https://apis.skype.com/v3');
     define('MSBOT_STATE_URL', 'https://state.botframework.com/v3');
     define('INVOICEPLANE_IMPORT', 'https://github.com/turbo124/Plane2Ninja');
+
+    define('TIME_TRACKER_USER_AGENT', 'Time Tracker');
 
     define('BOT_PLATFORM_WEB_APP', 'WebApp');
     define('BOT_PLATFORM_SKYPE', 'Skype');
@@ -405,6 +438,9 @@ if (! defined('APP_NAME')) {
     define('PAYMENT_TYPE_SWITCH', 23);
     define('PAYMENT_TYPE_ALIPAY', 28);
     define('PAYMENT_TYPE_SOFORT', 29);
+    define('PAYMENT_TYPE_SEPA', 30);
+    define('PAYMENT_TYPE_GOCARDLESS', 31);
+    define('PAYMENT_TYPE_BITCOIN', 32);
 
     define('PAYMENT_METHOD_STATUS_NEW', 'new');
     define('PAYMENT_METHOD_STATUS_VERIFICATION_FAILED', 'verification_failed');
@@ -418,15 +454,20 @@ if (! defined('APP_NAME')) {
     define('GATEWAY_TYPE_CUSTOM', 6);
     define('GATEWAY_TYPE_ALIPAY', 7);
     define('GATEWAY_TYPE_SOFORT', 8);
+    define('GATEWAY_TYPE_SEPA', 9);
+    define('GATEWAY_TYPE_GOCARDLESS', 10);
+    define('GATEWAY_TYPE_APPLE_PAY', 11);
     define('GATEWAY_TYPE_TOKEN', 'token');
 
     define('TEMPLATE_INVOICE', 'invoice');
     define('TEMPLATE_QUOTE', 'quote');
+    define('TEMPLATE_PROPOSAL', 'proposal');
     define('TEMPLATE_PARTIAL', 'partial');
     define('TEMPLATE_PAYMENT', 'payment');
     define('TEMPLATE_REMINDER1', 'reminder1');
     define('TEMPLATE_REMINDER2', 'reminder2');
     define('TEMPLATE_REMINDER3', 'reminder3');
+    define('TEMPLATE_REMINDER4', 'reminder4');
 
     define('RESET_FREQUENCY_DAILY', 1);
     define('RESET_FREQUENCY_WEEKLY', 2);
@@ -442,6 +483,9 @@ if (! defined('APP_NAME')) {
 
     define('FILTER_INVOICE_DATE', 'invoice_date');
     define('FILTER_PAYMENT_DATE', 'payment_date');
+
+    define('ADDRESS_BILLING', 'billing_address');
+    define('ADDRESS_SHIPPING', 'shipping_address');
 
     define('SOCIAL_GOOGLE', 'Google');
     define('SOCIAL_FACEBOOK', 'Facebook');
@@ -482,6 +526,9 @@ if (! defined('APP_NAME')) {
     define('PLAN_WHITE_LABEL', 'white_label');
     define('PLAN_TERM_MONTHLY', 'month');
     define('PLAN_TERM_YEARLY', 'year');
+
+    define('SUBSCRIPTION_FORMAT_JSON', 'JSON');
+    define('SUBSCRIPTION_FORMAT_UBL', 'UBL');
 
     // Pro
     define('FEATURE_CUSTOMIZE_INVOICE_DESIGN', 'customize_invoice_design');
@@ -548,6 +595,8 @@ if (! defined('APP_NAME')) {
     define('INVOICE_FIELDS_CLIENT', 'client_fields');
     define('INVOICE_FIELDS_INVOICE', 'invoice_fields');
     define('INVOICE_FIELDS_ACCOUNT', 'account_fields');
+    define('INVOICE_FIELDS_PRODUCT', 'product_fields');
+    define('INVOICE_FIELDS_TASK', 'task_fields');
 
     $creditCards = [
                 1 => ['card' => 'images/credit_cards/Test-Visa-Icon.png', 'text' => 'Visa'],
@@ -566,7 +615,6 @@ if (! defined('APP_NAME')) {
         'dateFormats' => 'App\Models\DateFormat',
         'datetimeFormats' => 'App\Models\DatetimeFormat',
         'languages' => 'App\Models\Language',
-        'paymentTerms' => 'App\Models\PaymentTerm',
         'paymentTypes' => 'App\Models\PaymentType',
         'countries' => 'App\Models\Country',
         'invoiceDesigns' => 'App\Models\InvoiceDesign',
